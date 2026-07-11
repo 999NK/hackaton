@@ -346,7 +346,7 @@ async function openAiScreenAnalysis({ image, question, currentPath, currentUrl, 
     question,
     currentPath,
     currentUrl,
-    domText: String(domText || '').slice(0, 6000),
+    domText: String(domText || '').slice(0, 12000),
     currentPageActions: entities.map((entity) => ({
       name: entity.name,
       type: entity.type,
@@ -367,12 +367,12 @@ async function openAiScreenAnalysis({ image, question, currentPath, currentUrl, 
     {
       type: 'text',
       text:
-        'Analise a tela atual do usuario usando a imagem e o contexto semantico salvo. Responda em portugues, de forma curta e util. Explique o que aparece na tela, responda a pergunta do usuario se houver, e cite quais acoes parecem disponiveis. Se houver risco de incerteza visual, diga isso claramente.\n\nContexto:\n' +
+        'Analise EXCLUSIVAMENTE a tela que o usuario esta vendo AGORA, conforme a imagem enviada e o DOM atual enviado abaixo. Ignore completamente o caminho (path) cadastrado ou telas de outras rotas — o que vale e o conteudo de fato visivel nesta tela. Responda em portugues, de forma curta e util. Explique o que aparece na tela, responda a pergunta do usuario se houver, e cite quais acoes parecem disponiveis. Se houver risco de incerteza visual, diga isso claramente.\n\nDOM atual da tela visivel:\n' +
         JSON.stringify(context),
     },
   ]
   if (image) {
-    content.push({ type: 'image_url', image_url: { url: image, detail: 'low' } })
+    content.push({ type: 'image_url', image_url: { url: image, detail: 'high' } })
   }
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -385,7 +385,7 @@ async function openAiScreenAnalysis({ image, question, currentPath, currentUrl, 
       model: process.env.OPENAI_VISION_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini',
       temperature: 0.2,
       response_format: { type: 'json_object' },
-      max_tokens: 700,
+      max_tokens: 1100,
       messages: [
         {
           role: 'system',
@@ -403,8 +403,12 @@ async function openAiScreenAnalysis({ image, question, currentPath, currentUrl, 
   return JSON.parse(raw)
 }
 
-async function openAiTtsText({ text, label, role, currentPath }) {
+async function openAiTtsText({ text, label, role, currentPath, lang }) {
   if (!process.env.OPENAI_API_KEY) return null
+  const isEn = lang === 'en'
+  const systemPrompt = isEn
+    ? 'Turn the text of a UI element into a short, clear, accessible spoken phrase in English. Respond only with JSON {"speech":"..."}. If it is a button/link/field, also state its likely function.'
+    : 'Transforme o texto de um elemento de interface em uma fala curta, clara e acessivel em portugues do Brasil. Responda apenas JSON {"speech":"..."}. Se for botao/link/campo, diga tambem a funcao provavel.'
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -419,8 +423,7 @@ async function openAiTtsText({ text, label, role, currentPath }) {
       messages: [
         {
           role: 'system',
-          content:
-            'Transforme o texto de um elemento de interface em uma fala curta, clara e acessivel em portugues do Brasil. Responda apenas JSON {"speech":"..."}. Se for botao/link/campo, diga tambem a funcao provavel.',
+          content: systemPrompt,
         },
         {
           role: 'user',
@@ -529,7 +532,7 @@ export async function handleWidget(req, res, endpoint) {
       currentPath,
       currentUrl: String(body.url || ''),
       question: String(body.question || ''),
-      domTextHash: hashPayload(String(body.domText || '').slice(0, 6000)),
+      domTextHash: hashPayload(String(body.domText || '').slice(0, 12000)),
       imageHash: hashPayload(String(body.image || '').slice(0, 240000)),
     }
     const screenCacheKey = hashPayload(screenRequest)
@@ -570,6 +573,7 @@ export async function handleWidget(req, res, endpoint) {
       label: String(body.label || ''),
       role: String(body.role || ''),
       currentPath: String(body.path || ''),
+      lang: String(body.lang || 'pt'),
     }
     const ttsCacheKey = hashPayload(ttsRequest)
     const cachedTts = await readAiCache(project.id, 'tts', ttsCacheKey).catch(() => null)
@@ -579,6 +583,7 @@ export async function handleWidget(req, res, endpoint) {
       label: String(body.label || ''),
       role: String(body.role || ''),
       currentPath: String(body.path || ''),
+      lang: String(body.lang || 'pt'),
     }).catch(() => null)
     const payload = { speech: speech || text.slice(0, 500) }
     await writeAiCache(project.id, scan?.id || null, 'tts', ttsCacheKey, ttsRequest, payload)

@@ -1,17 +1,15 @@
 import { useState } from 'react'
-import { Copy, Check, RefreshCw, Globe, Eye } from 'lucide-react'
+import { Copy, Check, RefreshCw, Eye, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Project, updateProject } from '@/services/projects'
 import { toast } from '@/hooks/use-toast'
 
 export function WidgetConfig({ project, onUpdate }: { project: Project; onUpdate: () => void }) {
   const [copied, setCopied] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
-  const [baseUrl, setBaseUrl] = useState(project.baseUrl || '')
-  const [savingUrl, setSavingUrl] = useState(false)
 
   const widgetUrl = `${window.location.origin}/widget.js`
+  const iconUrl = `${window.location.origin}/widget-icon.ico`
   const apiUrl = import.meta.env.VITE_API_URL || window.location.origin
   const snippet = `<script src="${widgetUrl}?token=${project.token}&api=${apiUrl}"></script>`
 
@@ -36,20 +34,7 @@ export function WidgetConfig({ project, onUpdate }: { project: Project; onUpdate
     }
   }
 
-  const handleSaveUrl = async () => {
-    setSavingUrl(true)
-    try {
-      await updateProject(project.id, { baseUrl })
-      toast({ title: 'URL salva!' })
-      onUpdate()
-    } catch {
-      toast({ title: 'Erro ao salvar URL', variant: 'destructive' })
-    } finally {
-      setSavingUrl(false)
-    }
-  }
-
-  const previewHtml = `<!DOCTYPE html><html><body style="margin:0;background:#0a0a0f;height:100%;min-height:200px;position:relative;font-family:sans-serif;"><div style="position:absolute;bottom:16px;right:16px;width:56px;height:56px;border-radius:50%;background:rgba(89,34,242,0.65);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;color:white;box-shadow:0 4px 20px rgba(89,34,242,0.4);"><svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M12 14a3 3 0 003-3V5a3 3 0 00-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 006 6.92V21h2v-3.08A7 7 0 0019 11h-2z"/></svg></div></body></html>`
+  const previewHtml = `<!DOCTYPE html><html><body style="margin:0;background:linear-gradient(135deg,#eef4ff,#dbeafe);height:100%;min-height:200px;position:relative;font-family:system-ui,sans-serif;"><div style="position:absolute;bottom:16px;right:16px;width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,0.82);backdrop-filter:blur(14px) saturate(1.4);border:2px solid rgba(37,99,235,0.25);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 24px rgba(37,99,235,0.3),0 0 0 1px rgba(255,255,255,0.6) inset;overflow:hidden;"><img src="${iconUrl}" style="width:38px;height:38px;object-fit:contain;display:block;" /></div></body></html>`
 
   return (
     <div className="grid lg:grid-cols-2 gap-6">
@@ -80,32 +65,19 @@ export function WidgetConfig({ project, onUpdate }: { project: Project; onUpdate
         </div>
 
         <div className="glass-panel rounded-2xl p-6">
-          <h3 className="text-lg font-bold mb-4">Snippet de Instalação</h3>
+          <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+            <Download size={18} /> Exportar Widget
+          </h3>
           <pre className="bg-[#09090b] p-4 rounded-xl text-sm text-emerald-400 border border-white/10 overflow-x-auto font-mono">
             <code>{snippet}</code>
           </pre>
-        </div>
-
-        <div className="glass-panel rounded-2xl p-6">
-          <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-            <Globe size={18} /> URL Base (CORS Whitelist)
-          </h3>
-          <div className="space-y-3">
-            <Input
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              className="bg-black/30 border-white/10 h-12 rounded-xl"
-              placeholder="https://sua-app.com"
-            />
-            <Button
-              onClick={handleSaveUrl}
-              disabled={savingUrl}
-              className="w-full h-11 rounded-xl font-bold"
-            >
-              {savingUrl ? 'Salvando...' : 'Salvar URL'}
-            </Button>
+          <div className="mt-4 grid gap-2 text-xs text-muted-foreground">
+            <span>Script: {widgetUrl}</span>
+            <span>API: {apiUrl}</span>
+            <span>Ícone: {iconUrl}</span>
           </div>
         </div>
+
       </div>
 
       <div className="glass-panel rounded-2xl p-6">
@@ -118,7 +90,7 @@ export function WidgetConfig({ project, onUpdate }: { project: Project; onUpdate
           className="w-full h-[300px] rounded-xl border border-white/10 bg-background"
         />
         <p className="text-xs text-muted-foreground mt-3">
-          O botão flutuante AssistiveTouch aparecerá no canto inferior direito do seu site.
+          O botão flutuante aparece com o ícone configurado e expande para voz, ações e navegação.
         </p>
       </div>
     </div>

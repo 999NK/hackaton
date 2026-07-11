@@ -11,6 +11,7 @@ import { TestGenerator } from '@/components/test-generator'
 import { DataExport } from '@/components/data-export'
 import { ManualScan } from '@/components/manual-scan'
 import { IntegrationPanel } from '@/components/integration-panel'
+import { WidgetConfig } from '@/components/widget-config'
 import { ScanHistory } from '@/components/scan-history'
 import { useRealtime } from '@/hooks/use-realtime'
 import {
@@ -23,6 +24,7 @@ import {
   FlaskConical,
   Download,
   Upload,
+  Puzzle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/hooks/use-toast'
@@ -136,6 +138,13 @@ export default function ProjectDetail() {
             Integração
           </TabsTrigger>
           <TabsTrigger
+            value="widget"
+            className="data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg rounded-full px-6 py-2.5 font-medium transition-all"
+          >
+            <Puzzle size={16} className="mr-2 inline" />
+            Widget
+          </TabsTrigger>
+          <TabsTrigger
             value="onboarding"
             className="data-[state=active]:bg-primary data-[state=active]:text-white data-[state=active]:shadow-lg rounded-full px-6 py-2.5 font-medium transition-all"
           >
@@ -219,6 +228,10 @@ export default function ProjectDetail() {
 
           <TabsContent value="integration" className="m-0 animate-fade-in-up">
             <IntegrationPanel project={project} />
+          </TabsContent>
+
+          <TabsContent value="widget" className="m-0 animate-fade-in-up">
+            <WidgetConfig project={project} onUpdate={loadData} />
           </TabsContent>
 
           <TabsContent value="onboarding" className="m-0 animate-fade-in-up">

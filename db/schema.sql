@@ -1,4 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE IF NOT EXISTS users (
   id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
@@ -71,6 +72,33 @@ CREATE TABLE IF NOT EXISTS relationships (
   updated timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS semantic_entity_embeddings (
+  entity_id text PRIMARY KEY REFERENCES semantic_entities(id) ON DELETE CASCADE,
+  scan_id text,
+  project_id text,
+  type text DEFAULT '',
+  slug text DEFAULT '',
+  name text DEFAULT '',
+  path text DEFAULT '',
+  content text NOT NULL DEFAULT '',
+  embedding vector(1536) NOT NULL,
+  created timestamptz NOT NULL DEFAULT now(),
+  updated timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS ai_action_cache (
+  id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  project_id text,
+  scan_id text,
+  endpoint text NOT NULL,
+  cache_key text NOT NULL,
+  request jsonb NOT NULL DEFAULT '{}'::jsonb,
+  response jsonb NOT NULL DEFAULT '{}'::jsonb,
+  hits integer NOT NULL DEFAULT 0,
+  created timestamptz NOT NULL DEFAULT now(),
+  updated timestamptz NOT NULL DEFAULT now()
+);
+
 ALTER TABLE users ALTER COLUMN id SET DEFAULT gen_random_uuid()::text;
 
 ALTER TABLE projects ALTER COLUMN id SET DEFAULT gen_random_uuid()::text;
@@ -104,6 +132,8 @@ ALTER TABLE scans ADD COLUMN IF NOT EXISTS updated timestamptz DEFAULT now();
 ALTER TABLE scans ADD COLUMN IF NOT EXISTS files_scanned integer;
 ALTER TABLE scans ADD COLUMN IF NOT EXISTS metadata jsonb;
 ALTER TABLE scans ADD COLUMN IF NOT EXISTS "timestamp" timestamptz;
+UPDATE scans SET files_scanned = COALESCE(files_scanned, files_count, 0) WHERE files_scanned IS NULL;
+ALTER TABLE scans ALTER COLUMN files_scanned SET DEFAULT 0;
 UPDATE scans SET files_count = COALESCE(files_count, files_scanned, 0) WHERE files_count IS NULL;
 UPDATE scans SET report = COALESCE(report, metadata, '{}'::jsonb) WHERE report IS NULL;
 UPDATE scans SET created = COALESCE(created, "timestamp", now()) WHERE created IS NULL;
@@ -150,6 +180,10 @@ CREATE INDEX IF NOT EXISTS idx_scans_project_status_created ON scans(project_id,
 CREATE INDEX IF NOT EXISTS idx_entities_scan ON semantic_entities(scan_id);
 CREATE INDEX IF NOT EXISTS idx_entities_scan_type ON semantic_entities(scan_id, type);
 CREATE INDEX IF NOT EXISTS idx_rels_scan ON relationships(scan_id);
+CREATE INDEX IF NOT EXISTS idx_entity_embeddings_project_scan ON semantic_entity_embeddings(project_id, scan_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_action_cache_key ON ai_action_cache(project_id, endpoint, cache_key);
+CREATE INDEX IF NOT EXISTS idx_ai_action_cache_project ON ai_action_cache(project_id, endpoint, updated DESC);
+DROP INDEX IF EXISTS idx_entity_embeddings_vector;
 
 CREATE OR REPLACE FUNCTION touch_updated_at()
 RETURNS trigger AS $$
@@ -182,4 +216,14 @@ FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
 DROP TRIGGER IF EXISTS touch_relationships_updated_at ON relationships;
 CREATE TRIGGER touch_relationships_updated_at
 BEFORE UPDATE ON relationships
+FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
+
+DROP TRIGGER IF EXISTS touch_entity_embeddings_updated_at ON semantic_entity_embeddings;
+CREATE TRIGGER touch_entity_embeddings_updated_at
+BEFORE UPDATE ON semantic_entity_embeddings
+FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
+
+DROP TRIGGER IF EXISTS touch_ai_action_cache_updated_at ON ai_action_cache;
+CREATE TRIGGER touch_ai_action_cache_updated_at
+BEFORE UPDATE ON ai_action_cache
 FOR EACH ROW EXECUTE FUNCTION touch_updated_at();

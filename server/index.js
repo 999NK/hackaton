@@ -62,19 +62,10 @@ async function requireAuth(req, res, next) {
   }
 }
 
-function projectCors(project, req, res, methods) {
-  let corsOrigin = '*'
-  const origin = req.headers.origin || ''
-  if (project) {
-    const baseUrl = project.base_url || ''
-    if (baseUrl && origin && !baseUrl.includes(origin)) corsOrigin = ''
-    else if (origin) corsOrigin = origin
-  }
-  if (corsOrigin) {
-    res.setHeader('Access-Control-Allow-Origin', corsOrigin)
-    res.setHeader('Access-Control-Allow-Methods', `${methods}, OPTIONS`)
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-  }
+function projectCors(_project, _req, res, methods) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', `${methods}, OPTIONS`)
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
 }
 
 async function findProjectByToken(token) {
@@ -216,7 +207,7 @@ app.post('/api/scans/reprocess', requireAuth, async (req, res) => {
   const project = await ensureProjectAccess(req.body?.projectId, req.user.id)
   if (!project) return res.status(404).json({ error: 'project not found' })
   const result = await pool.query(
-    "INSERT INTO scans (project_id, status, report, token) VALUES ($1, 'PROCESSING', '{}'::jsonb, $2) RETURNING *",
+    "INSERT INTO scans (project_id, status, report, token, files_scanned, metadata) VALUES ($1, 'PROCESSING', '{}'::jsonb, $2, 0, '{}'::jsonb) RETURNING *",
     [project.id, project.token],
   )
   res.status(201).json(rowScan(result.rows[0]))
@@ -274,8 +265,8 @@ app.post('/backend/v1/scanner', async (req, res) => {
 
   const result = await pool.query(
     `INSERT INTO scans
-       (project_id, status, report, entities_count, token, error_message, files_count, secrets_found)
-     VALUES ($1, 'COMPLETED', $2, $3, $4, '', $5, $6)
+       (project_id, status, report, entities_count, token, error_message, files_count, files_scanned, secrets_found, metadata)
+     VALUES ($1, 'COMPLETED', $2, $3, $4, '', $5, $5, $6, $2)
      RETURNING *`,
     [project.id, report, entitiesCount, token, body.filesCount || 0, body.secretsFound || 0],
   )
@@ -322,8 +313,8 @@ app.post('/backend/v1/manual-scan', requireAuth, async (req, res) => {
     await client.query('BEGIN')
     const scanResult = await client.query(
       `INSERT INTO scans
-         (project_id, status, phase, phase_detail, files_count, files_uploaded, secrets_found, token_budget, token_used, report, token)
-       VALUES ($1, 'PROCESSING', 'Ingesting', 'Processing manually pasted semantic data', $2, 0, 0, 0, 0, '{}'::jsonb, $3)
+         (project_id, status, phase, phase_detail, files_count, files_scanned, files_uploaded, secrets_found, token_budget, token_used, report, token, metadata)
+       VALUES ($1, 'PROCESSING', 'Ingesting', 'Processing manually pasted semantic data', $2, $2, 0, 0, 0, 0, '{}'::jsonb, $3, '{}'::jsonb)
        RETURNING *`,
       [project.id, data.entities.length, project.token],
     )

@@ -61,7 +61,7 @@ export function SemanticGraph({
   }, [entities])
 
   return (
-    <div className="w-full h-full relative bg-black/20 rounded-xl overflow-hidden">
+    <div className="relative h-full w-full overflow-hidden rounded-2xl bg-[#f7f6fb]">
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full">
         {relationships.map((rel) => {
           const s = nodes.get(rel.source)
@@ -98,7 +98,7 @@ export function SemanticGraph({
         ))}
       </svg>
 
-      <div className="absolute bottom-4 left-4 flex flex-wrap gap-3 text-xs bg-black/60 px-4 py-2 rounded-full border border-white/10 backdrop-blur-md">
+      <div className="absolute bottom-4 left-4 flex flex-wrap gap-3 rounded-full border border-violet-100 bg-white/90 px-4 py-2 text-xs text-slate-600 shadow-lg backdrop-blur-md">
         {Object.entries(TYPE_COLORS).map(([type, color]) => (
           <div key={type} className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
@@ -108,7 +108,7 @@ export function SemanticGraph({
       </div>
 
       {selected && (
-        <div className="absolute top-4 right-4 w-72 glass-panel rounded-2xl p-5 animate-spotlight">
+        <div className="surface-card absolute right-4 top-4 w-72 p-5 animate-spotlight">
           <div className="flex justify-between items-start mb-3">
             <span
               className="text-xs px-2 py-0.5 rounded-md font-bold uppercase"

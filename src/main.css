@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,100..900;1,100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -15,7 +15,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    --primary: 221 83% 53%;
+    --primary: 252 75% 58%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 214 32% 95%;
@@ -32,7 +32,7 @@
 
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 221 83% 53%;
+    --ring: 252 75% 58%;
 
     --radius: 0.75rem;
 
@@ -48,7 +48,7 @@
 
   * { border-color: hsl(var(--border)); }
   html { scroll-behavior: smooth; }
-  body { background: hsl(var(--background)); color: hsl(var(--foreground)); -webkit-font-smoothing: antialiased; }
+  body { background: hsl(var(--background)); color: hsl(var(--foreground)); font-family: 'Manrope', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
   button, a, input, select { -webkit-tap-highlight-color: transparent; }
 
   .dark {
@@ -105,12 +105,31 @@
   }
 
   .page-shell { width: min(100% - 2rem, 1440px); margin-inline: auto; }
-  .surface-card { border: 1px solid rgb(226 232 240); border-radius: 1.5rem; background: white; box-shadow: 0 1px 2px rgb(15 23 42 / 0.03), 0 16px 40px rgb(15 23 42 / 0.035); }
+  .surface-card { border: 1px solid rgb(229 226 239); border-radius: 1.5rem; background: white; box-shadow: 0 1px 2px rgb(32 24 61 / 0.03), 0 16px 40px rgb(32 24 61 / 0.04); }
   .eyebrow { font-size: 0.68rem; line-height: 1rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: rgb(148 163 184); }
   .status-pill { display: inline-flex; align-items: center; gap: .4rem; border: 1px solid rgb(226 232 240); border-radius: 9999px; background: white; padding: .3rem .65rem; font-size: .7rem; font-weight: 650; color: rgb(71 85 105); }
   .status-success { border-color: rgb(209 250 229); background: rgb(236 253 245); color: rgb(4 120 87); }
-  .app-button-primary { display: inline-flex; align-items: center; justify-content: center; border-radius: .75rem; background: rgb(37 99 235); padding: .65rem 1rem; font-size: .875rem; font-weight: 600; color: white; box-shadow: 0 4px 12px rgb(37 99 235 / .18); transition: .2s ease; }
-  .app-button-primary:hover { background: rgb(29 78 216); transform: translateY(-1px); }
+  .auth-input { height: 3rem; border-radius: .85rem; border-color: rgb(226 232 240); background: white; padding-inline: 1rem; color: rgb(15 23 42); box-shadow: 0 1px 2px rgb(15 23 42 / .03); }
+  .auth-input:focus-visible { border-color: rgb(139 92 246); box-shadow: 0 0 0 4px rgb(237 233 254); }
+  .app-button-primary { display: inline-flex; align-items: center; justify-content: center; border-radius: 9999px; background: rgb(101 76 219); padding: .7rem 1.1rem; font-size: .875rem; font-weight: 700; color: white; box-shadow: 0 8px 24px rgb(101 76 219 / .22); transition: .25s ease; }
+  .app-button-primary:hover { background: rgb(84 59 199); transform: translateY(-2px); }
+  .marketing-container { width: min(100% - 2rem, 1280px); margin-inline: auto; }
+  .marketing-section { padding-block: clamp(5rem, 9vw, 8.5rem); }
+  .marketing-hero { background: linear-gradient(145deg, #f7f5ff 0%, #eeeafe 46%, #f8f4ff 100%); }
+  .marketing-grid { background-image: linear-gradient(rgb(104 78 218 / .08) 1px, transparent 1px), linear-gradient(90deg, rgb(104 78 218 / .08) 1px, transparent 1px); background-size: 48px 48px; mask-image: linear-gradient(to bottom, black, transparent 78%); }
+  .marketing-orb { position: absolute; z-index: -10; border-radius: 9999px; filter: blur(90px); animation: orb-drift 9s ease-in-out infinite alternate; }
+  .marketing-eyebrow { font-size: .7rem; line-height: 1rem; font-weight: 800; letter-spacing: .17em; color: rgb(101 76 219); }
+  .marketing-button-primary, .marketing-button-secondary { display: inline-flex; min-height: 3.25rem; align-items: center; justify-content: center; gap: .5rem; border-radius: 9999px; padding-inline: 1.6rem; font-size: .875rem; font-weight: 800; transition: transform .3s ease, box-shadow .3s ease, background .3s ease; }
+  .marketing-button-primary { background: #171521; color: white; box-shadow: 0 16px 35px rgb(23 21 33 / .2); }
+  .marketing-button-primary:hover { transform: translateY(-3px); box-shadow: 0 22px 45px rgb(23 21 33 / .28); }
+  .marketing-button-secondary { border: 1px solid rgb(118 92 222 / .3); background: rgb(255 255 255 / .66); color: #2b263d; backdrop-filter: blur(16px); }
+  .marketing-button-secondary:hover { transform: translateY(-3px); background: white; }
+  .marketing-reveal { animation: marketing-reveal .8s cubic-bezier(.2,.8,.2,1) both; }
+  .marketing-float { animation: product-float 7s ease-in-out infinite; }
+  @keyframes marketing-reveal { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes product-float { 0%,100% { transform: translateY(0) rotateX(0); } 50% { transform: translateY(-10px) rotateX(1deg); } }
+  @keyframes orb-drift { from { transform: translate3d(-3%, -2%, 0) scale(.95); } to { transform: translate3d(5%, 4%, 0) scale(1.08); } }
+  @media (prefers-reduced-motion: reduce) { .marketing-reveal, .marketing-float, .marketing-orb { animation: none !important; } }
 
   @keyframes accordion-down {
     from {

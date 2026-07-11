@@ -1,85 +1,61 @@
 import { Link } from 'react-router-dom'
-import { Brain, Layers, Mic, LayoutTemplate } from 'lucide-react'
+import {
+  ArrowRight, Bot, ChevronDown, CircleCheck, Code2, Eye, Focus,
+  Gauge, Keyboard, Languages, Mic, MonitorCheck, ScanSearch, ShieldCheck, Sparkles,
+} from 'lucide-react'
+import { useState } from 'react'
+
+const features = [
+  { icon: <ScanSearch />, title: 'Auditoria WCAG local', text: 'Encontre problemas estruturados, priorizados por impacto e acompanhados de correções objetivas.' },
+  { icon: <Mic />, title: 'Navegação por voz', text: 'Transforme rotas, botões e formulários em ações que podem ser executadas com linguagem natural.' },
+  { icon: <Gauge />, title: 'Score e evolução', text: 'Acompanhe a saúde de acessibilidade entre scans e saiba exatamente onde melhorar primeiro.' },
+  { icon: <Code2 />, title: 'Seu código permanece local', text: 'Somente o mapa semântico e as violações estruturadas são enviados para o Skip Cloud.' },
+  { icon: <Bot />, title: 'Skill para agentes de IA', text: 'Codex, Claude Code e Cursor entendem o projeto real e executam o fluxo completo de auditoria.' },
+  { icon: <MonitorCheck />, title: 'Widget completo', text: 'Voz, leitura, contraste, destaque, navegação guiada e preferências em uma interface acessível.' },
+]
+
+const profiles = [
+  { icon: <Eye />, title: 'Baixa visão', text: 'Texto, contraste e realce ajustáveis.' },
+  { icon: <Keyboard />, title: 'Mobilidade', text: 'Navegação por teclado e por voz.' },
+  { icon: <Focus />, title: 'Foco e cognição', text: 'Menos distrações e fluxos guiados.' },
+  { icon: <Languages />, title: 'Leitura assistida', text: 'Conteúdo narrado e ações compreensíveis.' },
+]
 
 export default function Index() {
   return (
-    <div className="relative">
-      <div className="absolute inset-0 bg-primary/20 blur-[120px] -z-10 rounded-full w-[600px] h-[600px] top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-50" />
-
-      <section className="container mx-auto px-4 pt-32 pb-20 text-center animate-fade-in-up">
-        <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 max-w-4xl mx-auto leading-tight">
-          A Camada Semântica para{' '}
-          <span className="text-primary drop-shadow-[0_0_20px_rgba(89,34,242,0.4)]">
-            Acessibilidade Web
-          </span>
-        </h1>
-        <p className="text-xl text-muted-foreground mb-12 max-w-2xl mx-auto leading-relaxed">
-          Transforme código estruturado em mapas semânticos compreensíveis por humanos e IA.
-          Habilite navegação por voz e atalhos inteligentes em minutos.
-        </p>
-        <div className="flex flex-col sm:flex-row justify-center gap-4">
-          <Link
-            to="/register"
-            className="px-8 py-4 bg-primary text-white rounded-full font-bold text-lg hover:bg-primary/90 hover:scale-105 transition-all shadow-[0_0_40px_rgba(89,34,242,0.4)]"
-          >
-            Começar Grátis
-          </Link>
-          <a
-            href="#demo"
-            className="px-8 py-4 glass-panel rounded-full font-bold text-lg hover:bg-white/10 transition-all border border-white/10"
-          >
-            Ver Demonstração
-          </a>
+    <div className="overflow-hidden bg-white text-[#12111a]">
+      <section className="marketing-hero relative isolate min-h-[820px] overflow-hidden px-5 pb-20 pt-20 sm:px-8 lg:pt-28">
+        <div className="marketing-grid absolute inset-0 -z-20 opacity-40" />
+        <div className="marketing-orb -left-32 top-20 h-96 w-96 bg-violet-400/40" />
+        <div className="marketing-orb -right-28 top-0 h-[32rem] w-[32rem] bg-fuchsia-300/35 [animation-delay:-3s]" />
+        <div className="mx-auto max-w-7xl text-center">
+          <div className="marketing-reveal inline-flex items-center gap-2 rounded-full border border-violet-300/70 bg-white/70 px-4 py-2 text-xs font-bold text-violet-800 shadow-sm backdrop-blur-xl"><Sparkles size={14} /> Acessibilidade que começa no código</div>
+          <h1 className="marketing-reveal mx-auto mt-7 max-w-5xl text-balance text-5xl font-semibold leading-[.98] tracking-[-.055em] sm:text-6xl lg:text-[82px] [animation-delay:80ms]">Entenda, corrija e evolua a <span className="text-violet-600">acessibilidade</span> do seu produto.</h1>
+          <p className="marketing-reveal mx-auto mt-7 max-w-2xl text-pretty text-lg leading-8 text-slate-600 sm:text-xl [animation-delay:160ms]">O Skip transforma seu projeto em um mapa semântico, audita WCAG localmente e entrega uma experiência assistiva completa — sem enviar seu código-fonte.</p>
+          <div className="marketing-reveal mt-9 flex flex-col justify-center gap-3 sm:flex-row [animation-delay:240ms]"><Link to="/register" className="marketing-button-primary">Começar gratuitamente <ArrowRight size={17} /></Link><a href="#como-funciona" className="marketing-button-secondary">Ver como funciona</a></div>
+          <div className="marketing-reveal mx-auto mt-14 max-w-5xl [animation-delay:320ms]"><ProductMockup /></div>
         </div>
       </section>
 
-      <section id="features" className="container mx-auto px-4 py-24">
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <FeatureCard
-            icon={<Layers />}
-            title="Scanning Automático"
-            desc="Mapeia rotas, APIs e componentes do seu código sem alterá-lo com MCP local."
-          />
-          <FeatureCard
-            icon={<Brain />}
-            title="Enriquecimento por IA"
-            desc="Gera labels semânticos e dicas contextuais usando Skip AI Gateway avançado."
-          />
-          <FeatureCard
-            icon={<Mic />}
-            title="Navegação por Voz"
-            desc="Permite que usuários controlem a aplicação falando comandos naturalmente."
-          />
-          <FeatureCard
-            icon={<LayoutTemplate />}
-            title="UI AssistiveTouch"
-            desc="Widget injetável de altíssima acessibilidade, flutuante, intuitivo e responsivo."
-          />
-        </div>
-      </section>
+      <section className="border-y border-slate-200 bg-white py-8"><div className="mx-auto flex max-w-7xl flex-col items-center gap-5 px-5 lg:flex-row lg:justify-between"><p className="text-center text-sm font-semibold text-slate-500 lg:text-left">Uma camada única para todo o ciclo de acessibilidade</p><div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-sm font-semibold text-slate-400"><span>WCAG 2.2</span><span>React</span><span>Next.js</span><span>Vite</span><span>Claude Code</span><span>Codex</span><span>Cursor</span></div></div></section>
 
-      <section id="demo" className="container mx-auto px-4 py-20 mb-20">
-        <div className="glass-panel rounded-[2rem] p-2 md:p-6 max-w-6xl mx-auto border-white/5 overflow-hidden shadow-2xl relative">
-          <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none rounded-[2rem]" />
-          <img
-            src="https://img.usecurling.com/p/1200/700?q=developer%20dashboard%20dark&color=purple&dpr=2"
-            alt="Mockup do Dashboard"
-            className="rounded-2xl w-full object-cover opacity-70 mix-blend-screen"
-          />
-        </div>
-      </section>
+      <section id="como-funciona" className="marketing-section bg-white"><div className="marketing-container"><SectionIntro eyebrow="FLUXO CONTÍNUO" title="Da leitura do projeto à experiência acessível." text="Uma arquitetura simples, transparente e construída para equipes que precisam agir — não apenas gerar relatórios." /><div className="mt-16 grid gap-5 lg:grid-cols-3"><Step number="01" icon={<ScanSearch />} title="Mapeie" text="A skill entende framework, rotas, telas e todos os elementos navegáveis do projeto real." /><Step number="02" icon={<ShieldCheck />} title="Audite" text="As regras WCAG são aplicadas localmente e geram score, severidades e sugestões de correção." /><Step number="03" icon={<Sparkles />} title="Inclua" text="O widget usa o mapa para oferecer voz, leitura, destaque, navegação e fluxos guiados." /></div></div></section>
+
+      <section id="features" className="marketing-section bg-[#171521] text-white"><div className="marketing-container"><SectionIntro dark eyebrow="TECNOLOGIA QUE TRABALHA COM VOCÊ" title="Acessibilidade clara para quem desenvolve e para quem usa." text="Do diagnóstico à interface assistiva, cada parte foi desenhada para reduzir esforço e aumentar confiança." /><div className="mt-16 grid gap-px overflow-hidden rounded-[32px] border border-white/10 bg-white/10 md:grid-cols-2 lg:grid-cols-3">{features.map((item, index) => <article key={item.title} className="group bg-[#171521] p-7 transition duration-500 hover:bg-violet-600/15 sm:p-9"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-500/15 text-violet-300 transition group-hover:scale-110 group-hover:bg-violet-500 group-hover:text-white [&>svg]:h-5 [&>svg]:w-5">{item.icon}</span><p className="mt-8 text-xs font-bold text-violet-300">0{index + 1}</p><h3 className="mt-2 text-xl font-semibold tracking-tight">{item.title}</h3><p className="mt-3 text-sm leading-6 text-slate-400">{item.text}</p></article>)}</div></div></section>
+
+      <section className="marketing-section bg-[#eeeafe]"><div className="marketing-container grid items-center gap-14 lg:grid-cols-[1fr_1.05fr]"><div><SectionIntro align="left" eyebrow="EXPERIÊNCIA PERSONALIZÁVEL" title="Cada pessoa navega de um jeito. O Skip acompanha." text="Preferências acessíveis deixam de ser uma lista técnica e se tornam uma experiência simples, clara e pessoal." /><div className="mt-9 grid gap-3 sm:grid-cols-2">{profiles.map((profile) => <div key={profile.title} className="rounded-2xl border border-violet-200/70 bg-white/75 p-5 backdrop-blur-xl"><span className="text-violet-600 [&>svg]:h-5 [&>svg]:w-5">{profile.icon}</span><h3 className="mt-4 font-semibold">{profile.title}</h3><p className="mt-1 text-sm text-slate-500">{profile.text}</p></div>)}</div></div><WidgetDemo /></div></section>
+
+      <section className="marketing-section bg-white"><div className="marketing-container"><div className="rounded-[38px] bg-violet-600 px-7 py-12 text-white shadow-[0_30px_80px_rgba(91,67,220,.3)] sm:px-12 lg:flex lg:items-center lg:justify-between lg:px-16 lg:py-16"><div className="max-w-2xl"><p className="text-xs font-bold uppercase tracking-[.18em] text-violet-200">PRONTO PARA COMEÇAR?</p><h2 className="mt-4 text-4xl font-semibold leading-tight tracking-[-.04em] sm:text-5xl">Transforme acessibilidade em uma prática contínua.</h2><p className="mt-5 text-base leading-7 text-violet-100">Crie seu projeto, instale a skill e receba o primeiro mapa com score WCAG.</p></div><Link to="/register" className="mt-8 inline-flex h-13 items-center justify-center gap-2 rounded-full bg-white px-7 py-4 text-sm font-bold text-violet-700 transition hover:-translate-y-1 hover:shadow-xl lg:mt-0">Criar projeto grátis <ArrowRight size={17} /></Link></div></div></section>
+
+      <section className="marketing-section border-t border-slate-200 bg-[#fafafa]"><div className="marketing-container grid gap-12 lg:grid-cols-[.8fr_1.2fr]"><div><p className="marketing-eyebrow">PERGUNTAS FREQUENTES</p><h2 className="mt-4 text-4xl font-semibold tracking-[-.04em]">O essencial, sem letras miúdas.</h2></div><div className="divide-y divide-slate-200 border-y border-slate-200"><Faq question="O Skip envia meu código-fonte?">Não. A análise acontece no ambiente local. O Cloud recebe apenas mapas, score e violações estruturadas.</Faq><Faq question="Preciso trocar meu framework?">Não. A skill entende a estrutura real de projetos React, Next.js, Vite e outros sistemas de rotas.</Faq><Faq question="O widget funciona sem o dashboard aberto?">Sim. Depois de instalado no site, o widget consulta o mapa publicado e funciona de forma independente.</Faq><Faq question="Posso acompanhar melhorias entre versões?">Sim. Cada scan registra score e severidades para mostrar a evolução de acessibilidade ao longo do tempo.</Faq></div></div></section>
+
+      <footer className="bg-[#121019] px-5 py-12 text-white"><div className="mx-auto flex max-w-7xl flex-col gap-8 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-violet-600"><ShieldCheck size={20} /></span><span className="text-lg font-semibold">Skip<span className="text-violet-400">.</span></span></div><p className="text-sm text-slate-500">© 2026 Skip AI. Acessibilidade construída com clareza.</p><div className="flex gap-5 text-sm text-slate-400"><a href="#features" className="hover:text-white">Recursos</a><Link to="/login" className="hover:text-white">Entrar</Link></div></div></footer>
     </div>
   )
 }
 
-function FeatureCard({ icon, title, desc }: any) {
-  return (
-    <div className="glass-panel p-8 rounded-3xl hover:-translate-y-2 transition-all duration-300 group border-white/5 bg-gradient-to-br from-white/5 to-transparent">
-      <div className="w-14 h-14 rounded-2xl bg-primary/20 text-primary flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-primary group-hover:text-white transition-all shadow-inner border border-primary/20">
-        {icon}
-      </div>
-      <h3 className="text-xl font-bold mb-4">{title}</h3>
-      <p className="text-muted-foreground leading-relaxed">{desc}</p>
-    </div>
-  )
-}
+function ProductMockup() { return <div className="marketing-float rounded-[30px] border border-white/80 bg-white/70 p-2 shadow-[0_45px_110px_rgba(59,42,120,.25)] backdrop-blur-2xl"><div className="overflow-hidden rounded-[24px] border border-slate-200 bg-[#f7f7fb]"><div className="flex h-12 items-center gap-2 border-b border-slate-200 bg-white px-4"><i className="h-2.5 w-2.5 rounded-full bg-red-400" /><i className="h-2.5 w-2.5 rounded-full bg-amber-400" /><i className="h-2.5 w-2.5 rounded-full bg-green-400" /><div className="mx-auto h-6 w-52 rounded-lg bg-slate-100" /></div><div className="grid min-h-[390px] sm:grid-cols-[170px_1fr]"><aside className="hidden border-r border-slate-200 bg-[#181622] p-5 text-left sm:block"><div className="mb-7 flex items-center gap-2 text-sm font-semibold text-white"><span className="grid h-7 w-7 place-items-center rounded-lg bg-violet-600"><ShieldCheck size={14} /></span> Skip.</div>{['Visão geral', 'Acessibilidade', 'Mapa semântico', 'Widget'].map((item, i) => <div key={item} className={`mb-2 rounded-lg px-3 py-2 text-[11px] ${i === 1 ? 'bg-violet-600 text-white' : 'text-slate-500'}`}>{item}</div>)}</aside><div className="p-5 text-left sm:p-7"><div className="flex items-center justify-between"><div><p className="text-[10px] font-bold uppercase tracking-widest text-violet-600">Projeto selecionado</p><h3 className="mt-1 text-xl font-semibold">Portal do cliente</h3></div><span className="rounded-full bg-green-50 px-3 py-1 text-[10px] font-bold text-green-700">Monitorando</span></div><div className="mt-6 grid gap-3 sm:grid-cols-[.8fr_1.2fr]"><div className="rounded-2xl bg-violet-600 p-5 text-white"><p className="text-[10px] text-violet-200">SCORE WCAG</p><strong className="mt-3 block text-5xl">87</strong><p className="mt-1 text-xs text-violet-200">Nível AA</p></div><div className="rounded-2xl border border-slate-200 bg-white p-5"><p className="text-[10px] font-bold text-slate-400">PROBLEMAS POR IMPACTO</p><div className="mt-5 flex h-20 items-end gap-2">{[35, 75, 52, 20, 62, 38, 82].map((height, i) => <span key={i} className="flex-1 rounded-t bg-violet-200" style={{ height: `${height}%` }} />)}</div></div></div><div className="mt-3 rounded-2xl border border-slate-200 bg-white p-5"><div className="mb-4 flex justify-between"><p className="text-xs font-semibold">Violações prioritárias</p><span className="text-[10px] text-slate-400">12 encontradas</span></div>{['Imagem sem texto alternativo', 'Campo sem rótulo acessível', 'Ordem de títulos inconsistente'].map((item, i) => <div key={item} className="flex items-center gap-3 border-t border-slate-100 py-2.5 text-[10px] text-slate-500"><span className={`h-2 w-2 rounded-full ${i === 0 ? 'bg-red-500' : i === 1 ? 'bg-orange-400' : 'bg-amber-400'}`} />{item}<ChevronDown size={11} className="ml-auto" /></div>)}</div></div></div></div></div> }
+function WidgetDemo() { return <div className="relative mx-auto w-full max-w-md rounded-[34px] border border-white/80 bg-white p-5 shadow-[0_35px_80px_rgba(68,48,130,.2)]"><div className="flex items-center justify-between border-b border-slate-100 pb-4"><div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-violet-100 text-violet-600"><Sparkles size={19} /></span><div><p className="text-sm font-semibold">Menu de acessibilidade</p><p className="text-[10px] text-slate-400">Personalize sua experiência</p></div></div><span className="grid h-8 w-8 place-items-center rounded-full bg-slate-100 text-slate-400">×</span></div><div className="mt-4 grid grid-cols-3 gap-2.5">{['Voz', 'Leitura', 'Destaque', 'Guiado', 'Contraste', 'Navegar'].map((item, i) => <div key={item} className="rounded-2xl border border-slate-200 p-4 text-center"><span className="mx-auto grid h-9 w-9 place-items-center rounded-xl bg-violet-50 text-violet-600">{i % 2 ? <Eye size={16} /> : <Mic size={16} />}</span><p className="mt-2 text-[10px] font-semibold">{item}</p></div>)}</div><div className="mt-4 flex items-center gap-2 rounded-2xl bg-green-50 p-3 text-xs font-medium text-green-700"><CircleCheck size={16} /> Preferências salvas automaticamente</div></div> }
+function SectionIntro({ eyebrow, title, text, dark, align = 'center' }: any) { return <div className={`${align === 'center' ? 'mx-auto max-w-3xl text-center' : 'max-w-xl text-left'}`}><p className={`marketing-eyebrow ${dark ? 'text-violet-300' : ''}`}>{eyebrow}</p><h2 className={`mt-4 text-4xl font-semibold leading-tight tracking-[-.045em] sm:text-5xl ${dark ? 'text-white' : ''}`}>{title}</h2><p className={`mt-5 text-base leading-7 ${dark ? 'text-slate-400' : 'text-slate-600'}`}>{text}</p></div> }
+function Step({ number, icon, title, text }: any) { return <article className="group relative overflow-hidden rounded-[30px] border border-slate-200 bg-[#fafafa] p-8 transition duration-500 hover:-translate-y-2 hover:border-violet-200 hover:bg-[#f5f1ff] hover:shadow-[0_24px_60px_rgba(86,61,160,.12)]"><span className="absolute right-6 top-5 text-6xl font-semibold tracking-[-.08em] text-slate-100 transition group-hover:text-violet-200/60">{number}</span><span className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-100 text-violet-600 [&>svg]:h-5 [&>svg]:w-5">{icon}</span><h3 className="mt-16 text-2xl font-semibold tracking-tight">{title}</h3><p className="mt-3 text-sm leading-6 text-slate-500">{text}</p></article> }
+function Faq({ question, children }: any) { const [open, setOpen] = useState(false); return <div><button onClick={() => setOpen(!open)} className="flex w-full items-center justify-between gap-5 py-6 text-left"><span className="text-lg font-semibold">{question}</span><span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full bg-violet-100 text-violet-600 transition ${open ? 'rotate-180' : ''}`}><ChevronDown size={16} /></span></button><div className={`grid transition-all duration-300 ${open ? 'grid-rows-[1fr] pb-6' : 'grid-rows-[0fr]'}`}><p className="overflow-hidden text-sm leading-7 text-slate-500">{children}</p></div></div> }

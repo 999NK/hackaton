@@ -39,9 +39,9 @@ export function WidgetConfig({ project, onUpdate }: { project: Project; onUpdate
   return (
     <div className="grid lg:grid-cols-2 gap-6">
       <div className="space-y-6">
-        <div className="glass-panel rounded-2xl p-6">
+        <div className="surface-card p-6">
           <h3 className="text-lg font-bold mb-4">Token do Projeto</h3>
-          <code className="block bg-black/40 rounded-lg p-3 text-sm text-emerald-400 font-mono break-all border border-white/10 mb-4">
+          <code className="mb-4 block break-all rounded-xl border border-slate-800 bg-[#171521] p-3 font-mono text-sm text-violet-200">
             {project.token}
           </code>
           <div className="flex gap-2">
@@ -64,11 +64,11 @@ export function WidgetConfig({ project, onUpdate }: { project: Project; onUpdate
           </div>
         </div>
 
-        <div className="glass-panel rounded-2xl p-6">
+        <div className="surface-card p-6">
           <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
             <Download size={18} /> Exportar Widget
           </h3>
-          <pre className="bg-[#09090b] p-4 rounded-xl text-sm text-emerald-400 border border-white/10 overflow-x-auto font-mono">
+          <pre className="overflow-x-auto rounded-xl border border-slate-800 bg-[#171521] p-4 font-mono text-sm text-violet-200">
             <code>{snippet}</code>
           </pre>
           <div className="mt-4 grid gap-2 text-xs text-muted-foreground">
@@ -80,14 +80,14 @@ export function WidgetConfig({ project, onUpdate }: { project: Project; onUpdate
 
       </div>
 
-      <div className="glass-panel rounded-2xl p-6">
+      <div className="surface-card p-6">
         <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
           <Eye size={18} /> Pré-visualização do Widget
         </h3>
         <iframe
           srcDoc={previewHtml}
           title="Widget Preview"
-          className="w-full h-[300px] rounded-xl border border-white/10 bg-background"
+          className="h-[300px] w-full rounded-2xl border border-violet-100 bg-[#f7f6fb]"
         />
         <p className="text-xs text-muted-foreground mt-3">
           O botão flutuante aparece com o ícone configurado e expande para voz, ações e navegação.

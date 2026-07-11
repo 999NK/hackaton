@@ -23,7 +23,7 @@ export function ScanDetailSheet({ scan, open, onOpenChange }: Props) {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="glass-panel border-white/10 text-white w-full sm:max-w-2xl overflow-y-auto">
+      <SheetContent className="w-full overflow-y-auto border-violet-100 bg-white text-slate-950 sm:max-w-2xl">
         <SheetHeader className="mb-6">
           <SheetTitle className="text-2xl font-bold flex items-center gap-3">
             Detalhes do Scan <ScanStatusBadge status={scan.status} />
@@ -35,7 +35,7 @@ export function ScanDetailSheet({ scan, open, onOpenChange }: Props) {
             <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
               Data/Hora
             </h4>
-            <p className="text-white">{new Date(scan.created).toLocaleString('pt-BR')}</p>
+            <p className="text-slate-800">{new Date(scan.created).toLocaleString('pt-BR')}</p>
           </div>
 
           {scan.errorMessage && (
@@ -49,19 +49,19 @@ export function ScanDetailSheet({ scan, open, onOpenChange }: Props) {
             <h4 className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wider">
               Briefing
             </h4>
-            <pre className="bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-emerald-400 font-mono whitespace-pre-wrap break-words">
+            <pre className="whitespace-pre-wrap break-words rounded-2xl border border-slate-800 bg-[#171521] p-4 font-mono text-sm text-violet-200">
               {briefing}
             </pre>
           </div>
 
           <Accordion type="single" collapsible>
-            <AccordionItem value="json" className="border-white/10">
+            <AccordionItem value="json" className="border-violet-100">
               <AccordionTrigger className="text-sm font-semibold text-muted-foreground uppercase tracking-wider hover:no-underline">
                 Raw JSON Report
               </AccordionTrigger>
               <AccordionContent>
-                <ScrollArea className="h-[400px] w-full rounded-xl border border-white/10 bg-black/40">
-                  <pre className="p-4 text-xs text-white/80 font-mono whitespace-pre-wrap break-words">
+                <ScrollArea className="h-[400px] w-full rounded-2xl border border-slate-800 bg-[#171521]">
+                  <pre className="whitespace-pre-wrap break-words p-4 font-mono text-xs text-slate-300">
                     {JSON.stringify(report, null, 2)}
                   </pre>
                 </ScrollArea>

@@ -1,0 +1,392 @@
+{
+  "generatedAt": "2026-07-11T04:39:01.348Z",
+  "collections": [
+    {
+      "name": "users",
+      "type": "auth",
+      "apiRules": {
+        "list": "id = @request.auth.id",
+        "view": "id = @request.auth.id",
+        "create": "",
+        "update": "id = @request.auth.id",
+        "delete": "id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "avatar",
+          "type": "file",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX `idx_tokenKey__pb_users_auth_` ON `users` (`tokenKey`)",
+        "CREATE UNIQUE INDEX `idx_email__pb_users_auth_` ON `users` (`email`) WHERE `email` != ''"
+      ]
+    },
+    {
+      "name": "projects",
+      "type": "base",
+      "apiRules": {
+        "list": "owner = @request.auth.id",
+        "view": "owner = @request.auth.id",
+        "create": "owner = @request.auth.id",
+        "update": "owner = @request.auth.id",
+        "delete": "owner = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "token",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "baseUrl",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "framework",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "language",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "user",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "lastScannedAt",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "owner",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        }
+      ],
+      "indexes": ["CREATE UNIQUE INDEX `idx_projects_token` ON `projects` (token)"]
+    },
+    {
+      "name": "scans",
+      "type": "base",
+      "apiRules": {
+        "list": "project.owner = @request.auth.id",
+        "view": "project.owner = @request.auth.id",
+        "create": null,
+        "update": null,
+        "delete": "@request.auth.id != '' && project.user = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "project",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "projects"
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["PROCESSING", "ENRICHING", "COMPLETED", "FAILED"]
+        },
+        {
+          "name": "filesCount",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "secretsFound",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "errorMessage",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "phase",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "phaseDetail",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tokenUsed",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tokenBudget",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "filesUploaded",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "report",
+          "type": "json",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "entitiesCount",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "token",
+          "type": "text",
+          "required": true,
+          "system": false
+        }
+      ],
+      "indexes": ["CREATE INDEX `idx_scans_project` ON `scans` (project)"]
+    },
+    {
+      "name": "semantic_entities",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && scan.project.user = @request.auth.id",
+        "view": "@request.auth.id != '' && scan.project.user = @request.auth.id",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && scan.project.user = @request.auth.id",
+        "delete": "@request.auth.id != '' && scan.project.user = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "scan",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "scans"
+        },
+        {
+          "name": "type",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["ROUTE", "COMPONENT", "API", "FLOW", "BUSINESS_RULE"]
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "slug",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "path",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pageTitle",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "semanticLabels",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "accessibilityHint",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "confidence",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "evidence",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "metadata",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX `idx_entities_scan` ON `semantic_entities` (scan)"]
+    },
+    {
+      "name": "relationships",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && scan.project.user = @request.auth.id",
+        "view": "@request.auth.id != '' && scan.project.user = @request.auth.id",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && scan.project.user = @request.auth.id",
+        "delete": "@request.auth.id != '' && scan.project.user = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "scan",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "scans"
+        },
+        {
+          "name": "source",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "semantic_entities"
+        },
+        {
+          "name": "target",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "semantic_entities"
+        },
+        {
+          "name": "type",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["CONTAINS", "CONSUMES", "TRIGGERS", "REDIRECTS", "VALIDATES"]
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX `idx_rels_scan` ON `relationships` (scan)"]
+    }
+  ]
+}

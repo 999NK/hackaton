@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/backend/v1/api/scanner/status/:scanId",
+      "destination": "/api/backend/v1/scanner/status/:scanId"
+    },
+    {
+      "source": "/backend/v1/api/scanner",
+      "destination": "/api/backend/v1/scanner"
+    },
+    {
       "source": "/backend/v1",
       "destination": "/api/backend/v1"
     },

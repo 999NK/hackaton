@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/backend/v1/:path*",
+      "destination": "/api/backend/v1/:path*"
+    },
+    {
+      "source": "/((?!api/|backend/v1/|assets/|favicon.ico|widget.js|placeholder.svg|skip.png|og-image.png).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

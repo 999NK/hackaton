@@ -11,6 +11,7 @@ dotenv.config({ quiet: true })
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '..')
 const app = express()
+const isVercel = Boolean(process.env.VERCEL)
 const isProduction = process.env.NODE_ENV === 'production' || process.argv.includes('--production')
 const port = Number(process.env.PORT || 8090)
 const jwtSecret = process.env.JWT_SECRET || 'change-me-before-production'
@@ -487,19 +488,23 @@ app.use((err, _req, res, _next) => {
 
 await migrate()
 
-if (isProduction) {
-  app.use(express.static(path.join(rootDir, 'dist')))
-  app.get(/.*/, (_req, res) => res.sendFile(path.join(rootDir, 'dist', 'index.html')))
-} else {
-  const { createServer } = await import('vite')
-  const vite = await createServer({
-    server: { middlewareMode: true, hmr: { port: Number(process.env.HMR_PORT || 24679) } },
-    appType: 'spa',
-    root: rootDir,
+if (!isVercel) {
+  if (isProduction) {
+    app.use(express.static(path.join(rootDir, 'dist')))
+    app.get(/.*/, (_req, res) => res.sendFile(path.join(rootDir, 'dist', 'index.html')))
+  } else {
+    const { createServer } = await import('vite')
+    const vite = await createServer({
+      server: { middlewareMode: true, hmr: { port: Number(process.env.HMR_PORT || 24679) } },
+      appType: 'spa',
+      root: rootDir,
+    })
+    app.use(vite.middlewares)
+  }
+
+  app.listen(port, () => {
+    console.log(`Server running at http://localhost:${port}`)
   })
-  app.use(vite.middlewares)
 }
 
-app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`)
-})
+export default app

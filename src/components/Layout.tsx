@@ -1,154 +1,68 @@
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import { LayoutDashboard, BookOpen, Key, Settings, Bell, Search, Menu } from 'lucide-react'
+import { Bell, ChevronDown, LayoutGrid, LogOut, Menu, Search, ShieldCheck } from 'lucide-react'
 import { useAuth } from '@/hooks/use-auth'
 import { AssistiveWidget } from '@/components/Widget'
 
 export default function Layout() {
   const { user, signOut } = useAuth()
   const location = useLocation()
-
   const isPublic = ['/', '/login', '/register'].includes(location.pathname)
 
   if (isPublic) {
     return (
-      <main className="flex flex-col min-h-screen bg-background text-foreground overflow-x-hidden">
-        <header className="fixed top-0 w-full glass-panel z-40 px-6 py-4 flex items-center justify-between border-b border-white/5">
-          <Link to="/" className="text-xl font-bold text-primary flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white">
-              AI
+      <main className="min-h-screen bg-white text-slate-950">
+        <header className="fixed inset-x-0 top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur-2xl">
+          <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 sm:px-8">
+            <Brand />
+            <nav className="hidden items-center gap-7 text-sm font-medium text-slate-500 md:flex">
+              <a href="/#features" className="transition hover:text-slate-950">Recursos</a>
+              <a href="/#demo" className="transition hover:text-slate-950">Como funciona</a>
+            </nav>
+            <div className="flex items-center gap-2">
+              {user ? <Link to="/dashboard" className="app-button-primary">Abrir dashboard</Link> : <><Link to="/login" className="hidden px-3 py-2 text-sm font-medium text-slate-600 hover:text-slate-950 sm:block">Entrar</Link><Link to="/register" className="app-button-primary">Começar grátis</Link></>}
             </div>
-            AccessLayer
-          </Link>
-          <nav className="hidden md:flex gap-6 font-medium text-sm text-white/80">
-            <Link to="#features" className="hover:text-primary transition-colors">
-              Recursos
-            </Link>
-            <Link to="#demo" className="hover:text-primary transition-colors">
-              Demonstração
-            </Link>
-          </nav>
-          <div className="flex gap-4 items-center">
-            {user ? (
-              <Link
-                to="/dashboard"
-                className="px-4 py-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
-              >
-                Dashboard
-              </Link>
-            ) : (
-              <>
-                <Link
-                  to="/login"
-                  className="px-4 py-2 text-sm font-medium hover:text-primary transition-all"
-                >
-                  Entrar
-                </Link>
-                <Link
-                  to="/register"
-                  className="px-4 py-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
-                >
-                  Começar Grátis
-                </Link>
-              </>
-            )}
           </div>
         </header>
-        <div className="pt-20">
-          <Outlet />
-        </div>
+        <div className="pt-16"><Outlet /></div>
       </main>
     )
   }
 
   return (
-    <div className="flex h-screen bg-background text-foreground overflow-hidden">
-      <aside className="w-64 glass-panel border-r border-white/5 hidden md:flex flex-col z-20">
-        <div className="p-6">
-          <Link to="/" className="text-xl font-bold text-primary flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white">
-              AI
-            </div>
-            AccessLayer
-          </Link>
-        </div>
-        <nav className="flex-1 px-4 py-6 flex flex-col gap-2">
-          <Link
-            to="/dashboard"
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors font-medium ${location.pathname === '/dashboard' ? 'bg-primary/20 text-primary' : 'hover:bg-white/5 text-muted-foreground'}`}
-          >
-            <LayoutDashboard size={20} />
-            Dashboard
-          </Link>
-          <a
-            href="#"
-            className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-muted-foreground font-medium"
-          >
-            <BookOpen size={20} />
-            Documentação
-          </a>
-          <a
-            href="#"
-            className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-muted-foreground font-medium"
-          >
-            <Key size={20} />
-            API Keys
-          </a>
-          <a
-            href="#"
-            className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-colors text-muted-foreground font-medium"
-          >
-            <Settings size={20} />
-            Configurações
-          </a>
+    <div className="flex min-h-screen bg-[#f5f7fa] text-slate-950">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[248px] flex-col border-r border-slate-200 bg-white lg:flex">
+        <div className="flex h-20 items-center px-7"><Brand /></div>
+        <nav className="flex-1 px-4 py-4">
+          <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Workspace</p>
+          <Link to="/dashboard" className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition ${location.pathname.startsWith('/dashboard') ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'}`}><LayoutGrid size={18} /> Projetos</Link>
         </nav>
-        <div className="p-4 border-t border-white/5">
-          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-black/20">
-            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center font-bold text-primary border border-primary/30">
-              {user?.name?.charAt(0) || 'U'}
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <p className="text-sm font-medium truncate">{user?.name}</p>
-              <button
-                onClick={signOut}
-                className="text-xs text-muted-foreground hover:text-white transition-colors"
-              >
-                Sair
-              </button>
-            </div>
+        <div className="border-t border-slate-100 p-4">
+          <div className="flex items-center gap-3 rounded-2xl p-2.5 hover:bg-slate-50">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-sm font-semibold text-white">{user?.name?.charAt(0)?.toUpperCase() || 'U'}</div>
+            <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-800">{user?.name || 'Usuário'}</p><p className="truncate text-xs text-slate-400">Administrador</p></div>
+            <button onClick={signOut} aria-label="Sair" className="rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600"><LogOut size={16} /></button>
           </div>
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col h-full relative overflow-hidden z-10">
-        <header className="h-20 glass-panel border-b border-white/5 flex items-center justify-between px-8 shrink-0">
-          <div className="flex items-center gap-4">
-            <button className="md:hidden text-muted-foreground hover:text-white transition-colors">
-              <Menu size={24} />
-            </button>
-            <div className="relative hidden md:block">
-              <Search
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
-                size={16}
-              />
-              <input
-                type="text"
-                placeholder="Buscar projetos..."
-                className="pl-12 pr-4 py-2.5 bg-black/20 border border-white/10 rounded-full text-sm focus:outline-none focus:border-primary/50 w-72 transition-all shadow-inner"
-              />
-            </div>
+      <main className="min-w-0 flex-1 lg:pl-[248px]">
+        <header className="sticky top-0 z-20 flex h-20 items-center justify-between border-b border-slate-200/80 bg-white/85 px-5 backdrop-blur-xl sm:px-8">
+          <div className="flex items-center gap-3">
+            <button aria-label="Abrir menu" className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 lg:hidden"><Menu size={20} /></button>
+            <div className="relative hidden sm:block"><Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" /><input type="search" placeholder="Buscar projetos e scans" className="h-10 w-72 rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-50" /></div>
           </div>
-          <div className="flex items-center gap-4">
-            <button className="relative p-2.5 rounded-full bg-black/20 hover:bg-white/10 transition-colors border border-white/5">
-              <Bell size={18} />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full shadow-[0_0_8px_#5922f2]"></span>
-            </button>
+          <div className="flex items-center gap-2">
+            <button aria-label="Notificações" className="relative rounded-xl p-2.5 text-slate-500 transition hover:bg-slate-100"><Bell size={19} /><span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-blue-600 ring-2 ring-white" /></button>
+            <button className="flex items-center gap-2 rounded-xl p-1.5 pl-2 transition hover:bg-slate-100"><div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-900 text-xs font-semibold text-white">{user?.name?.charAt(0)?.toUpperCase() || 'U'}</div><ChevronDown size={14} className="text-slate-400" /></button>
           </div>
         </header>
-        <div className="flex-1 overflow-y-auto overflow-x-hidden animate-fade-in-up">
-          <Outlet />
-        </div>
+        <div><Outlet /></div>
         <AssistiveWidget />
       </main>
     </div>
   )
+}
+
+function Brand() {
+  return <Link to="/" className="flex items-center gap-2.5"><span className="grid h-9 w-9 place-items-center rounded-xl bg-blue-600 text-white shadow-sm shadow-blue-200"><ShieldCheck size={19} strokeWidth={2.4} /></span><span className="text-[17px] font-semibold tracking-[-0.02em] text-slate-950">Skip<span className="text-blue-600">.</span></span></Link>
 }

@@ -1,93 +1,29 @@
 import { Link } from 'react-router-dom'
-import { ChevronRight, Globe, FileCode, Network, Bug, Clock, Trash2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { ScanStatusBadge } from '@/components/scan-status-badge'
+import { ArrowUpRight, Clock3, Globe2, ShieldCheck, Trash2 } from 'lucide-react'
 import { Project } from '@/services/projects'
 import { Scan } from '@/services/scans'
 import { formatDistanceToNow } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 
-interface Props {
-  project: Project
-  latestScan?: Scan
-  entityCount: number
-  onDelete: (id: string) => void
-}
+interface Props { project: Project; latestScan?: Scan; entityCount: number; onDelete: (id: string) => void }
 
 export function ProjectCard({ project, latestScan, entityCount, onDelete }: Props) {
+  const score = latestScan?.report?.wcag?.score
   return (
-    <div className="glass-panel rounded-3xl p-6 flex flex-col group hover:border-primary/40 hover:bg-white/[0.04] transition-all duration-300 relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-primary/20 transition-all" />
-      <div className="flex justify-between items-start mb-3 relative z-10">
-        <h3 className="text-xl font-bold truncate pr-2">{project.name}</h3>
-        <button
-          onClick={() => onDelete(project.id)}
-          className="p-2 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-muted-foreground transition-colors shrink-0"
-        >
-          <Trash2 size={16} />
-        </button>
+    <article className="surface-card group flex min-h-[280px] flex-col p-6 transition duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-xl hover:shadow-slate-200/50">
+      <div className="flex items-start justify-between gap-4">
+        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-blue-50 text-blue-600"><ShieldCheck size={21} /></div>
+        <button aria-label={`Excluir ${project.name}`} onClick={() => onDelete(project.id)} className="rounded-xl p-2 text-slate-300 transition hover:bg-red-50 hover:text-red-600"><Trash2 size={17} /></button>
       </div>
-      <div className="flex items-center gap-2 mb-3 relative z-10 flex-wrap">
-        <span className="text-xs px-2.5 py-1 rounded-lg bg-black/40 font-semibold border border-white/10">
-          {project.framework || 'N/A'} • {project.language || 'N/A'}
-        </span>
-        {latestScan && <ScanStatusBadge status={latestScan.status} />}
+      <div className="mt-5"><h3 className="truncate text-xl font-semibold tracking-tight text-slate-950">{project.name}</h3><p className="mt-1 flex items-center gap-1.5 truncate text-sm text-slate-400"><Globe2 size={13} />{project.baseUrl || 'URL não informada'}</p></div>
+      <div className="mt-5 grid grid-cols-3 divide-x divide-slate-100 rounded-2xl bg-slate-50 py-3 text-center">
+        <Metric value={score ?? '—'} label="Score" accent={typeof score === 'number'} />
+        <Metric value={entityCount} label="Telas" />
+        <Metric value={latestScan?.report?.wcag?.violations?.length ?? '—'} label="Problemas" />
       </div>
-      <div className="space-y-1.5 mb-4 relative z-10 text-sm text-muted-foreground">
-        <p className="flex items-center gap-2 truncate">
-          <Globe size={14} className="text-primary/70 shrink-0" /> {project.baseUrl || '—'}
-        </p>
-        <p className="flex items-center gap-2">
-          <Clock size={14} className="text-primary/70 shrink-0" />
-          {project.lastScannedAt
-            ? formatDistanceToNow(new Date(project.lastScannedAt), {
-                addSuffix: true,
-                locale: ptBR,
-              })
-            : 'Nunca escaneado'}
-        </p>
-      </div>
-      <div className="grid grid-cols-3 gap-2 mb-4 relative z-10">
-        <Metric
-          icon={<FileCode size={14} />}
-          value={latestScan?.filesCount || 0}
-          label="Arquivos"
-        />
-        <Metric icon={<Network size={14} />} value={entityCount} label="Entidades" />
-        <Metric
-          icon={<Bug size={14} />}
-          value={latestScan?.secretsFound || 0}
-          label="Secrets"
-          danger={!!latestScan?.secretsFound}
-        />
-      </div>
-      <Link to={`/dashboard/${project.id}`} className="mt-auto relative z-10">
-        <Button className="w-full gap-2 h-11 rounded-xl group-hover:shadow-primary/30 transition-shadow">
-          Ver Mapa <ChevronRight size={16} />
-        </Button>
-      </Link>
-    </div>
+      <div className="mt-auto flex items-center justify-between pt-5"><p className="flex items-center gap-1.5 text-xs text-slate-400"><Clock3 size={13} />{project.lastScannedAt ? formatDistanceToNow(new Date(project.lastScannedAt), { addSuffix: true, locale: ptBR }) : 'Ainda não analisado'}</p><Link to={`/dashboard/${project.id}`} aria-label={`Abrir ${project.name}`} className="grid h-9 w-9 place-items-center rounded-xl bg-slate-900 text-white transition group-hover:bg-blue-600"><ArrowUpRight size={16} /></Link></div>
+    </article>
   )
 }
 
-function Metric({
-  icon,
-  value,
-  label,
-  danger,
-}: {
-  icon: React.ReactNode
-  value: number
-  label: string
-  danger?: boolean
-}) {
-  return (
-    <div className="flex flex-col items-center justify-center p-2 rounded-xl bg-black/20 border border-white/5">
-      <div className={`flex items-center gap-1 ${danger ? 'text-red-400' : 'text-white'}`}>
-        {icon}
-        <span className="font-bold text-sm">{value}</span>
-      </div>
-      <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</span>
-    </div>
-  )
-}
+function Metric({ value, label, accent }: { value: number | string; label: string; accent?: boolean }) { return <div><strong className={`block text-lg font-semibold ${accent ? 'text-blue-600' : 'text-slate-800'}`}>{value}</strong><span className="text-[10px] font-medium uppercase tracking-wider text-slate-400">{label}</span></div> }

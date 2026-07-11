@@ -6,33 +6,33 @@
 
 @layer base {
   :root {
-    --background: 240 9% 6%;
-    --foreground: 0 0% 100%;
+    --background: 216 28% 97%;
+    --foreground: 222 47% 11%;
 
-    --card: 240 7% 12%;
-    --card-foreground: 0 0% 100%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
 
-    --popover: 240 7% 12%;
-    --popover-foreground: 0 0% 100%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 256 89% 54%;
+    --primary: 221 83% 53%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 240 7% 15%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 214 32% 95%;
+    --secondary-foreground: 222 47% 11%;
 
-    --muted: 240 7% 15%;
-    --muted-foreground: 240 5% 65%;
+    --muted: 214 32% 95%;
+    --muted-foreground: 215 16% 47%;
 
-    --accent: 256 89% 54%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 214 100% 96%;
+    --accent-foreground: 221 83% 45%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 240 7% 20%;
-    --input: 240 7% 20%;
-    --ring: 256 89% 54%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 221 83% 53%;
 
     --radius: 0.75rem;
 
@@ -45,6 +45,11 @@
     --sidebar-border: 240 7% 20%;
     --sidebar-ring: 256 89% 54%;
   }
+
+  * { border-color: hsl(var(--border)); }
+  html { scroll-behavior: smooth; }
+  body { background: hsl(var(--background)); color: hsl(var(--foreground)); -webkit-font-smoothing: antialiased; }
+  button, a, input, select { -webkit-tap-highlight-color: transparent; }
 
   .dark {
     --background: 240 9% 6%;
@@ -93,11 +98,19 @@
 
 @layer utilities {
   .glass-panel {
-    background-color: rgba(255, 255, 255, 0.03);
+    background-color: rgba(255, 255, 255, 0.9);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid rgb(226 232 240);
   }
+
+  .page-shell { width: min(100% - 2rem, 1440px); margin-inline: auto; }
+  .surface-card { border: 1px solid rgb(226 232 240); border-radius: 1.5rem; background: white; box-shadow: 0 1px 2px rgb(15 23 42 / 0.03), 0 16px 40px rgb(15 23 42 / 0.035); }
+  .eyebrow { font-size: 0.68rem; line-height: 1rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: rgb(148 163 184); }
+  .status-pill { display: inline-flex; align-items: center; gap: .4rem; border: 1px solid rgb(226 232 240); border-radius: 9999px; background: white; padding: .3rem .65rem; font-size: .7rem; font-weight: 650; color: rgb(71 85 105); }
+  .status-success { border-color: rgb(209 250 229); background: rgb(236 253 245); color: rgb(4 120 87); }
+  .app-button-primary { display: inline-flex; align-items: center; justify-content: center; border-radius: .75rem; background: rgb(37 99 235); padding: .65rem 1rem; font-size: .875rem; font-weight: 600; color: white; box-shadow: 0 4px 12px rgb(37 99 235 / .18); transition: .2s ease; }
+  .app-button-primary:hover { background: rgb(29 78 216); transform: translateY(-1px); }
 
   @keyframes accordion-down {
     from {

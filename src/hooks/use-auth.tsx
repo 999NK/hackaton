@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import pb from '@/lib/pocketbase/client'
+import { apiFetch, authToken } from '@/lib/api'
 
 interface AuthContextType {
   user: any
@@ -19,33 +19,37 @@ export const useAuth = () => {
 }
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<any>(pb.authStore.isValid ? pb.authStore.record : null)
-  const [isAuthenticated, setIsAuthenticated] = useState(pb.authStore.isValid)
+  const [user, setUser] = useState<any>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const unsubscribe = pb.authStore.onChange((_token, record) => {
-      setUser(pb.authStore.isValid ? record : null)
-      setIsAuthenticated(pb.authStore.isValid)
-    })
-    if (pb.authStore.isValid) {
-      pb.collection('users')
-        .authRefresh()
-        .catch(() => pb.authStore.clear())
-        .finally(() => setLoading(false))
-    } else {
-      if (pb.authStore.record) pb.authStore.clear()
+    if (!authToken.get()) {
       setLoading(false)
+      return
     }
-    return () => {
-      unsubscribe()
-    }
+    apiFetch<{ user: any }>('/api/auth/me')
+      .then(({ user }) => {
+        setUser(user)
+        setIsAuthenticated(true)
+      })
+      .catch(() => {
+        authToken.clear()
+        setUser(null)
+        setIsAuthenticated(false)
+      })
+      .finally(() => setLoading(false))
   }, [])
 
   const signUp = async (email: string, password: string) => {
     try {
-      await pb.collection('users').create({ email, password, passwordConfirm: password })
-      await pb.collection('users').authWithPassword(email, password)
+      const result = await apiFetch<{ token: string; user: any }>('/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      })
+      authToken.set(result.token)
+      setUser(result.user)
+      setIsAuthenticated(true)
       return { error: null }
     } catch (error) {
       return { error }
@@ -54,7 +58,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     try {
-      await pb.collection('users').authWithPassword(email, password)
+      const result = await apiFetch<{ token: string; user: any }>('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      })
+      authToken.set(result.token)
+      setUser(result.user)
+      setIsAuthenticated(true)
       return { error: null }
     } catch (error) {
       return { error }
@@ -62,7 +72,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
 
   const signOut = () => {
-    pb.authStore.clear()
+    authToken.clear()
+    setUser(null)
+    setIsAuthenticated(false)
   }
 
   return (

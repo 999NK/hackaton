@@ -1,4 +1,4 @@
-import pb from '@/lib/pocketbase/client'
+import { apiFetch } from '@/lib/api'
 
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -14,9 +14,8 @@ export const sendOnboardingMessage = async (
   message: string,
   conversationHistory: ChatMessage[],
 ): Promise<OnboardingResponse> => {
-  return pb.send('/backend/v1/onboarding/chat', {
+  return apiFetch<OnboardingResponse>('/backend/v1/onboarding/chat', {
     method: 'POST',
     body: JSON.stringify({ projectId, message, conversationHistory }),
-    headers: { 'Content-Type': 'application/json' },
   })
 }

@@ -1,4 +1,4 @@
-import pb from '@/lib/pocketbase/client'
+import { apiFetch } from '@/lib/api'
 
 export interface ManualScanData {
   entities: any[]
@@ -13,9 +13,8 @@ export const submitManualScan = async (
   projectId: string,
   data: ManualScanData,
 ): Promise<ManualScanResponse> => {
-  return await pb.send('/backend/v1/manual-scan', {
+  return await apiFetch<ManualScanResponse>('/backend/v1/manual-scan', {
     method: 'POST',
     body: JSON.stringify({ projectId, data }),
-    headers: { 'Content-Type': 'application/json' },
   })
 }

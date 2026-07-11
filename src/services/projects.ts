@@ -1,4 +1,4 @@
-import pb from '@/lib/pocketbase/client'
+import { apiFetch } from '@/lib/api'
 
 export interface Project {
   id: string
@@ -15,21 +15,27 @@ export interface Project {
 }
 
 export const getProjects = async (): Promise<Project[]> => {
-  return await pb.collection('projects').getFullList({ sort: '-created' })
+  return await apiFetch<Project[]>('/api/projects')
 }
 
 export const getProject = async (id: string): Promise<Project> => {
-  return await pb.collection('projects').getOne(id)
+  return await apiFetch<Project>(`/api/projects/${id}`)
 }
 
 export const createProject = async (data: Partial<Project>): Promise<Project> => {
-  return await pb.collection('projects').create(data)
+  return await apiFetch<Project>('/api/projects', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
 }
 
 export const updateProject = async (id: string, data: Partial<Project>): Promise<Project> => {
-  return await pb.collection('projects').update(id, data)
+  return await apiFetch<Project>(`/api/projects/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
 }
 
 export const deleteProject = async (id: string): Promise<void> => {
-  await pb.collection('projects').delete(id)
+  await apiFetch<void>(`/api/projects/${id}`, { method: 'DELETE' })
 }

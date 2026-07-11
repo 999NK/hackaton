@@ -1,4 +1,4 @@
-import pb from '@/lib/pocketbase/client'
+import { apiFetch } from '@/lib/api'
 
 export interface SemanticEntity {
   id: string
@@ -19,15 +19,12 @@ export interface SemanticEntity {
 }
 
 export const getEntities = async (scanId: string): Promise<SemanticEntity[]> => {
-  return await pb.collection('semantic_entities').getFullList({
-    filter: `scan = '${scanId}'`,
-    sort: '-created',
-  })
+  return await apiFetch<SemanticEntity[]>(`/api/entities?scanId=${encodeURIComponent(scanId)}`)
 }
 
 export const getEntityCount = async (scanId: string): Promise<number> => {
-  const result = await pb.collection('semantic_entities').getList(1, 1, {
-    filter: `scan = '${scanId}'`,
-  })
-  return result.totalItems
+  const result = await apiFetch<{ count: number }>(
+    `/api/entities/count?scanId=${encodeURIComponent(scanId)}`,
+  )
+  return result.count
 }

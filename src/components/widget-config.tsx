@@ -12,7 +12,7 @@ export function WidgetConfig({ project, onUpdate }: { project: Project; onUpdate
   const [savingUrl, setSavingUrl] = useState(false)
 
   const widgetUrl = `${window.location.origin}/widget.js`
-  const apiUrl = import.meta.env.VITE_POCKETBASE_URL
+  const apiUrl = import.meta.env.VITE_API_URL || window.location.origin
   const snippet = `<script src="${widgetUrl}?token=${project.token}&api=${apiUrl}"></script>`
 
   const handleCopy = () => {

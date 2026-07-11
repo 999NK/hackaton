@@ -1,4 +1,4 @@
-import pb from '@/lib/pocketbase/client'
+import { apiFetch } from '@/lib/api'
 
 export interface Scan {
   id: string
@@ -20,19 +20,16 @@ export interface Scan {
 }
 
 export const getScans = async (projectId: string): Promise<Scan[]> => {
-  return await pb.collection('scans').getFullList({
-    filter: `project = '${projectId}'`,
-    sort: '-created',
-  })
+  return await apiFetch<Scan[]>(`/api/scans?projectId=${encodeURIComponent(projectId)}`)
 }
 
 export const getAllScans = async (): Promise<Scan[]> => {
-  return await pb.collection('scans').getFullList({ sort: '-created' })
+  return await apiFetch<Scan[]>('/api/scans')
 }
 
 export const reprocessScan = async (projectId: string): Promise<Scan> => {
-  return await pb.collection('scans').create({
-    project: projectId,
-    status: 'PROCESSING',
+  return await apiFetch<Scan>('/api/scans/reprocess', {
+    method: 'POST',
+    body: JSON.stringify({ projectId }),
   })
 }

@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_POCKETBASE_URL
+import { apiUrl } from '@/lib/api'
 
 export interface ScanPayload {
   projectName: string
@@ -20,7 +20,7 @@ export const submitScan = async (
   token: string,
   payload: ScanPayload,
 ): Promise<{ scanId: string }> => {
-  const res = await fetch(`${BASE_URL}/backend/v1/scanner`, {
+  const res = await fetch(apiUrl('/backend/v1/scanner'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -38,7 +38,7 @@ export const submitScan = async (
 }
 
 export const getScanStatus = async (token: string, scanId: string): Promise<ScanStatus> => {
-  const res = await fetch(`${BASE_URL}/backend/v1/scanner/status/${scanId}`, {
+  const res = await fetch(apiUrl(`/backend/v1/scanner/status/${scanId}`), {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,

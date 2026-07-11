@@ -1,4 +1,4 @@
-import pb from '@/lib/pocketbase/client'
+import { apiFetch } from '@/lib/api'
 
 export interface Relationship {
   id: string
@@ -11,7 +11,7 @@ export interface Relationship {
 }
 
 export const getRelationships = async (scanId: string): Promise<Relationship[]> => {
-  return await pb.collection('relationships').getFullList({
-    filter: `scan = '${scanId}'`,
-  })
+  return await apiFetch<Relationship[]>(
+    `/api/relationships?scanId=${encodeURIComponent(scanId)}`,
+  )
 }

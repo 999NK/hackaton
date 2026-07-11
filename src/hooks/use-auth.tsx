@@ -12,6 +12,28 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+async function authFetch<T>(primaryPath: string, fallbackPaths: string[], body?: unknown): Promise<T> {
+  try {
+    return await apiFetch<T>(primaryPath, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  } catch (error: any) {
+    if (error?.status !== 404) throw error
+    for (const path of fallbackPaths) {
+      try {
+        return await apiFetch<T>(path, {
+          method: 'POST',
+          body: JSON.stringify(body),
+        })
+      } catch (fallbackError: any) {
+        if (fallbackError?.status !== 404) throw fallbackError
+      }
+    }
+    throw error
+  }
+}
+
 export const useAuth = () => {
   const context = useContext(AuthContext)
   if (!context) throw new Error('useAuth must be used within an AuthProvider')
@@ -28,7 +50,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false)
       return
     }
-    apiFetch<{ user: any }>('/api/auth/me')
+    apiFetch<{ user: any }>('/api/auth/me').catch((error: any) => {
+      if (error?.status === 404) return apiFetch<{ user: any }>('/api/me')
+      throw error
+    })
       .then(({ user }) => {
         setUser(user)
         setIsAuthenticated(true)
@@ -43,10 +68,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signUp = async (email: string, password: string) => {
     try {
-      const result = await apiFetch<{ token: string; user: any }>('/api/auth/register', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      })
+      const result = await authFetch<{ token: string; user: any }>(
+        '/api/auth/register',
+        ['/api/register', '/auth/register', '/register'],
+        { email, password },
+      )
       authToken.set(result.token)
       setUser(result.user)
       setIsAuthenticated(true)
@@ -58,10 +84,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const result = await apiFetch<{ token: string; user: any }>('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password }),
-      })
+      const result = await authFetch<{ token: string; user: any }>(
+        '/api/auth/login',
+        ['/api/login', '/auth/login', '/login'],
+        { email, password },
+      )
       authToken.set(result.token)
       setUser(result.user)
       setIsAuthenticated(true)

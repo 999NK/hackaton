@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/backend/v1/api/scanner/status/:scanId",
-      "destination": "/api/backend/v1/scanner/status/:scanId"
+      "destination": "/api/scanner/status/:scanId"
     },
     {
       "source": "/backend/v1/api/scanner",
-      "destination": "/api/backend/v1/scanner"
+      "destination": "/api/scanner"
     },
     {
       "source": "/backend/v1",

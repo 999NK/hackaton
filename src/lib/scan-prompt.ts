@@ -1,7 +1,7 @@
 import { Project } from '@/services/projects'
 
 export function buildSkipAgentPrompt(project: Project) {
-  const endpoint = `${window.location.origin}/backend/v1`
+  const endpoint = window.location.origin
   return `Quero que você instale e execute a skill Skip AI neste projeto.
 
 1. Baixe a skill oficial deste repositório:

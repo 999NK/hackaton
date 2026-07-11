@@ -1,20 +1,16 @@
 {
   "rewrites": [
     {
-      "source": "/backend/v1/api/scanner/status/:scanId",
-      "destination": "/api/scanner/status/:scanId"
-    },
-    {
-      "source": "/backend/v1/api/scanner",
-      "destination": "/api/scanner"
+      "source": "/api/:path*",
+      "destination": "/api/gateway?gatewayPath=api/:path*"
     },
     {
       "source": "/backend/v1",
-      "destination": "/api/backend/v1"
+      "destination": "/api/gateway?gatewayPath=backend/v1"
     },
     {
       "source": "/backend/v1/:path*",
-      "destination": "/api/backend/v1/:path*"
+      "destination": "/api/gateway?gatewayPath=backend/v1/:path*"
     },
     {
       "source": "/((?!api/|backend/v1/|assets/|favicon.ico|widget.js|placeholder.svg|skip.png|og-image.png).*)",

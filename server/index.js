@@ -487,10 +487,14 @@ app.use((err, _req, res, _next) => {
 await migrate()
 
 if (!isVercel) {
+  const skipVite = process.env.SKIP_VITE === 'true'
+
   if (isProduction) {
+    // Serve the built frontend in production
     app.use(express.static(path.join(rootDir, 'dist')))
     app.get(/.*/, (_req, res) => res.sendFile(path.join(rootDir, 'dist', 'index.html')))
-  } else {
+  } else if (!skipVite) {
+    // Embedded Vite middleware mode (legacy single-port mode)
     const { createServer } = await import('vite')
     const vite = await createServer({
       server: { middlewareMode: true, hmr: { port: Number(process.env.HMR_PORT || 24679) } },
@@ -499,9 +503,15 @@ if (!isVercel) {
     })
     app.use(vite.middlewares)
   }
+  // When SKIP_VITE=true: only the API is served — Vite runs separately on port 8080
+  // and proxies /api/* and /backend/* requests here (port 8090)
 
   app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`)
+    if (skipVite || isProduction) {
+      console.log(`API server running at http://localhost:${port}`)
+    } else {
+      console.log(`Server running at http://localhost:${port}`)
+    }
   })
 }
 

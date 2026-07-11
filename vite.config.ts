@@ -10,6 +10,20 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: '::',
     port: 8080,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8090',
+        changeOrigin: true,
+      },
+      '/backend': {
+        target: 'http://localhost:8090',
+        changeOrigin: true,
+      },
+      '/auth': {
+        target: 'http://localhost:8090',
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     outDir: mode === 'development' ? 'dev-dist' : 'dist',

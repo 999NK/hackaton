@@ -250,7 +250,7 @@ app.get('/api/relationships', requireAuth, async (req, res) => {
   res.json(result.rows.map(rowRelationship))
 })
 
-app.post(['/backend/v1/scanner', '/backend/v1/api/scanner'], async (req, res) => {
+app.post(['/api/scanner', '/backend/v1/scanner', '/backend/v1/api/scanner'], async (req, res) => {
   const header = req.headers.authorization || ''
   const token = header.startsWith('Bearer ') ? header.slice(7) : ''
   if (!token) return res.status(401).json({ error: 'Token ausente' })
@@ -275,7 +275,11 @@ app.post(['/backend/v1/scanner', '/backend/v1/api/scanner'], async (req, res) =>
 })
 
 app.get(
-  ['/backend/v1/scanner/status/:scanId', '/backend/v1/api/scanner/status/:scanId'],
+  [
+    '/api/scanner/status/:scanId',
+    '/backend/v1/scanner/status/:scanId',
+    '/backend/v1/api/scanner/status/:scanId',
+  ],
   async (req, res) => {
     const header = req.headers.authorization || ''
     const token = header.startsWith('Bearer ') ? header.slice(7) : ''

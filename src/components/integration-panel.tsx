@@ -1,97 +1,29 @@
 import { useState } from 'react'
-import { Copy, Check, Terminal, AlertTriangle, ExternalLink } from 'lucide-react'
+import { Bot, Check, Copy, ExternalLink, KeyRound, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Project } from '@/services/projects'
+import { buildSkipAgentPrompt } from '@/lib/scan-prompt'
 import { toast } from '@/hooks/use-toast'
 
 export function IntegrationPanel({ project }: { project: Project }) {
-  const [copiedToken, setCopiedToken] = useState(false)
-  const [copiedCommand, setCopiedCommand] = useState(false)
+  const [copied, setCopied] = useState<'prompt' | 'token' | null>(null)
+  const prompt = buildSkipAgentPrompt(project)
 
-  const origin = window.location.origin
-  const npxCommand = `npx @skip-ai/scanner --token=${project.token} --url=${origin}/backend/v1`
-
-  const handleCopyToken = () => {
-    navigator.clipboard.writeText(project.token)
-    setCopiedToken(true)
-    toast({ title: 'Token copiado!' })
-    setTimeout(() => setCopiedToken(false), 2000)
-  }
-
-  const handleCopyCommand = () => {
-    navigator.clipboard.writeText(npxCommand)
-    setCopiedCommand(true)
-    toast({ title: 'Comando copiado!' })
-    setTimeout(() => setCopiedCommand(false), 2000)
+  const copy = async (value: string, type: 'prompt' | 'token') => {
+    await navigator.clipboard.writeText(value)
+    setCopied(type); toast({ title: type === 'prompt' ? 'Prompt copiado para a LLM' : 'Token copiado' })
+    window.setTimeout(() => setCopied(null), 2000)
   }
 
   return (
-    <div className="space-y-6">
-      <Alert className="glass-panel border-amber-500/30 bg-amber-500/5 rounded-2xl">
-        <AlertTriangle className="h-5 w-5 text-amber-400" />
-        <AlertTitle className="text-amber-400 font-bold">Aviso de Segurança</AlertTitle>
-        <AlertDescription className="text-amber-200/80">
-          Não compartilhe este token. Ele dá acesso a enviar scans para este projeto.
-        </AlertDescription>
-      </Alert>
-
-      <div className="glass-panel rounded-[2rem] p-8 lg:p-10 border-white/5">
-        <h3 className="text-2xl font-bold mb-4 flex items-center gap-3">
-          <Terminal size={24} className="text-primary" /> Comando do Scanner
-        </h3>
-        <p className="text-muted-foreground text-lg mb-6 max-w-3xl">
-          Execute este comando na raiz do seu projeto para iniciar o scan de acessibilidade.
-        </p>
-        <div className="relative group mb-3">
-          <pre className="bg-[#09090b] p-6 rounded-2xl overflow-x-auto text-sm md:text-base text-emerald-400 border border-white/10 shadow-inner font-mono">
-            <code>{npxCommand}</code>
-          </pre>
-          <Button
-            variant="secondary"
-            className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white rounded-xl h-10 px-4 opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-md gap-2"
-            onClick={handleCopyCommand}
-          >
-            {copiedCommand ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
-            Copiar comando completo
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          A flag <code className="text-emerald-400">--url</code> aponta para a URL do backend do
-          ambiente atual ({origin}/backend/v1).
-        </p>
-      </div>
-
-      <div className="glass-panel rounded-2xl p-6 border-white/5">
-        <h4 className="font-semibold text-sm mb-3">Token do Projeto</h4>
-        <div className="flex items-center gap-3">
-          <code className="flex-1 block bg-black/40 rounded-lg p-3 text-sm text-emerald-400 font-mono break-all border border-white/10">
-            {project.token}
-          </code>
-          <Button
-            variant="secondary"
-            className="bg-white/10 hover:bg-white/20 text-white rounded-xl h-10 px-4 gap-2 shrink-0"
-            onClick={handleCopyToken}
-          >
-            {copiedToken ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
-            Copiar
-          </Button>
-        </div>
-      </div>
-
-      <div className="glass-panel rounded-2xl p-6 border-white/5">
-        <div className="flex items-start gap-3">
-          <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
-            <ExternalLink size={16} className="text-primary" />
-          </div>
-          <div>
-            <h4 className="font-semibold text-sm mb-1">Como funciona</h4>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              O scanner analisa seu projeto e envia o mapa semântico para esta plataforma. Os
-              resultados aparecem na aba "Histórico de Scans" automaticamente.
-            </p>
-          </div>
-        </div>
+    <div className="grid gap-6 xl:grid-cols-[1.65fr_1fr]">
+      <section className="surface-card overflow-hidden">
+        <div className="border-b border-slate-100 p-6 sm:p-8"><div className="flex items-start gap-4"><div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Bot size={23} /></div><div><p className="eyebrow">Instalação assistida</p><h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Prompt para seu agente de IA</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Cole este prompt no Codex, Claude Code, Cursor ou outro agente compatível. Ele instalará a skill, analisará o projeto e enviará o scan.</p></div></div></div>
+        <div className="p-6 sm:p-8"><div className="relative rounded-2xl border border-slate-800 bg-slate-950 p-5 shadow-inner"><pre className="max-h-[420px] overflow-auto whitespace-pre-wrap pr-2 font-mono text-[13px] leading-6 text-slate-300"><code>{prompt}</code></pre></div><Button onClick={() => copy(prompt, 'prompt')} className="mt-4 h-11 w-full gap-2 rounded-xl bg-blue-600 font-semibold text-white hover:bg-blue-700 sm:w-auto">{copied === 'prompt' ? <Check size={17} /> : <Copy size={17} />} {copied === 'prompt' ? 'Prompt copiado' : 'Copiar prompt completo'}</Button></div>
+      </section>
+      <div className="space-y-6">
+        <section className="surface-card p-6"><div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-50 text-emerald-600"><ShieldCheck size={19} /></div><div><p className="text-sm font-semibold text-slate-900">Privacidade local</p><p className="text-xs text-slate-400">Seu código não é enviado</p></div></div><p className="mt-4 text-sm leading-6 text-slate-500">A skill lê os arquivos localmente e envia somente o mapa, score e violações estruturadas.</p><a href="https://github.com/999NK/skip-skill" target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:underline">Ver skill no GitHub <ExternalLink size={14} /></a></section>
+        <section className="surface-card p-6"><div className="flex items-center gap-2"><KeyRound size={18} className="text-slate-400" /><h3 className="font-semibold text-slate-900">Token do projeto</h3></div><code className="mt-4 block break-all rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-600">{project.token}</code><Button variant="outline" onClick={() => copy(project.token, 'token')} className="mt-3 h-10 gap-2 rounded-xl border-slate-200 bg-white text-slate-700">{copied === 'token' ? <Check size={15} /> : <Copy size={15} />} Copiar token</Button><p className="mt-4 text-xs leading-5 text-amber-700">Mantenha este token privado. Ele permite enviar scans para este projeto.</p></section>
       </div>
     </div>
   )

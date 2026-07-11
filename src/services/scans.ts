@@ -1,60 +1,6 @@
 import { apiFetch } from '@/lib/api'
-
-export type WcagSeverity = 'critical' | 'serious' | 'moderate' | 'minor'
-
-export interface WcagViolation {
-  id: string
-  rule: string
-  level: 'A' | 'AA' | 'AAA'
-  severity: WcagSeverity
-  impact: string
-  title: string
-  description: string
-  screen: string
-  filePath: string
-  selector?: string
-  fix: string
-  wcagUrl?: string
-}
-
-export interface WcagReport {
-  score: number
-  level: 'A' | 'AA' | 'AAA'
-  violations: WcagViolation[]
-  summary: Record<WcagSeverity, number>
-  auditedAt: string
-  rulesVersion: string
-}
-
-export interface GuidedFlowStep {
-  screen: string
-  action: string
-  label: string
-  navigatesTo?: string
-}
-
-export interface GuidedFlow {
-  name: string
-  steps: GuidedFlowStep[]
-}
-
-export interface ScoreHistoryEntry {
-  scannedAt: string
-  score: number
-  violations: number
-}
-
-export interface ScanReport {
-  navigationMap?: {
-    screens?: Array<{ id: string; title: string; route: string; actions?: unknown[] }>
-    navigationGraph?: Array<{ from: string; to: string; label?: string }>
-  }
-  briefing?: string
-  wcag?: WcagReport
-  guidedFlows?: GuidedFlow[]
-  history?: ScoreHistoryEntry[]
-  [key: string]: unknown
-}
+import { ScanReport } from '@/types'
+export type { ScanReport, WcagReport, WcagViolation, GuidedFlow, GuidedFlowStep, HistoryEntry as ScoreHistoryEntry, Severity as WcagSeverity } from '@/types'
 
 export interface Scan {
   id: string

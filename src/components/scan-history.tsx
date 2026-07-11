@@ -1,120 +1,27 @@
 import { useState } from 'react'
-import { RefreshCw, FileSearch, Terminal } from 'lucide-react'
+import { Check, Copy, FileSearch, RefreshCw, Terminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ScanStatusBadge } from '@/components/scan-status-badge'
 import { ScanDetailSheet } from '@/components/scan-detail-sheet'
 import { Scan } from '@/services/scans'
 import { Project } from '@/services/projects'
+import { buildSkipAgentPrompt } from '@/lib/scan-prompt'
+import { toast } from '@/hooks/use-toast'
 
-interface Props {
-  scans: Scan[]
-  project: Project
-  loading?: boolean
-  onRefresh: () => void
-}
+interface Props { scans: Scan[]; project: Project; loading?: boolean; onRefresh: () => void; selectedScanId?: string; onSelectScan?: (id: string) => void }
 
-export function ScanHistory({ scans, project, loading, onRefresh }: Props) {
-  const [selectedScan, setSelectedScan] = useState<Scan | null>(null)
+export function ScanHistory({ scans, project, loading, onRefresh, selectedScanId, onSelectScan }: Props) {
+  const [detailScan, setDetailScan] = useState<Scan | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const prompt = buildSkipAgentPrompt(project)
+  const refresh = async () => { setRefreshing(true); await onRefresh(); window.setTimeout(() => setRefreshing(false), 700) }
+  const copyPrompt = async () => { await navigator.clipboard.writeText(prompt); setCopied(true); toast({ title: 'Prompt copiado para a LLM' }); window.setTimeout(() => setCopied(false), 2000) }
 
-  const handleRefresh = () => {
-    setRefreshing(true)
-    onRefresh()
-    setTimeout(() => setRefreshing(false), 1000)
-  }
+  if (loading) return <div className="space-y-3">{[1, 2, 3].map((item) => <Skeleton key={item} className="h-16 rounded-2xl bg-slate-200" />)}</div>
+  if (!scans.length) return <section className="surface-card border-dashed p-8 text-center sm:p-10"><div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Terminal size={25} /></div><h3 className="text-lg font-semibold text-slate-900">Nenhum scan registrado</h3><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">Use seu agente de IA para instalar a skill e executar a primeira auditoria.</p><div className="mx-auto mt-6 max-w-3xl rounded-2xl border border-slate-800 bg-slate-950 p-5 text-left"><pre className="max-h-64 overflow-auto whitespace-pre-wrap font-mono text-xs leading-5 text-slate-300">{prompt}</pre></div><Button onClick={copyPrompt} className="mt-4 h-11 gap-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700">{copied ? <Check size={16} /> : <Copy size={16} />} {copied ? 'Prompt copiado' : 'Copiar prompt completo'}</Button></section>
 
-  const handleViewDetails = (scan: Scan) => {
-    setSelectedScan(scan)
-    setSheetOpen(true)
-  }
-
-  const npxCommand = `npx @skip-ai/scanner --token=${project.token} --url=${window.location.origin}/backend/v1`
-
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        <div className="flex justify-end">
-          <Skeleton className="h-10 w-32 rounded-xl bg-white/5" />
-        </div>
-        {[1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-16 rounded-2xl bg-white/5" />
-        ))}
-      </div>
-    )
-  }
-
-  if (scans.length === 0) {
-    return (
-      <div className="glass-panel rounded-[2rem] border-dashed border-2 border-white/10 bg-black/20 p-10 flex flex-col items-center text-center">
-        <div className="w-16 h-16 bg-primary/20 rounded-2xl flex items-center justify-center mb-4 text-primary border border-primary/30">
-          <Terminal size={28} />
-        </div>
-        <h3 className="text-xl font-bold mb-2">Nenhum scan registrado</h3>
-        <p className="text-muted-foreground mb-6 max-w-md">
-          Rode o scanner no seu projeto para ver o resultado aqui
-        </p>
-        <div className="w-full max-w-2xl">
-          <pre className="bg-[#09090b] p-4 rounded-xl text-sm text-emerald-400 border border-white/10 font-mono overflow-x-auto">
-            <code>{npxCommand}</code>
-          </pre>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button
-          variant="secondary"
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="gap-2 bg-white/10 hover:bg-white/20 rounded-xl h-10 px-4"
-        >
-          <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
-          Atualizar
-        </Button>
-      </div>
-
-      <div className="glass-panel rounded-[2rem] overflow-hidden border-white/5 bg-black/20 overflow-x-auto">
-        <table className="w-full text-left text-sm md:text-base">
-          <thead className="bg-white/5 border-b border-white/10">
-            <tr>
-              <th className="p-5 font-semibold text-white/80">Data/Hora</th>
-              <th className="p-5 font-semibold text-white/80">Status</th>
-              <th className="p-5 font-semibold text-white/80">Telas mapeadas</th>
-              <th className="p-5 font-semibold text-white/80">Ações</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {scans.map((s) => (
-              <tr key={s.id} className="hover:bg-white/[0.03] transition-colors">
-                <td className="p-5 text-muted-foreground">
-                  {new Date(s.created).toLocaleString('pt-BR')}
-                </td>
-                <td className="p-5">
-                  <ScanStatusBadge status={s.status} />
-                </td>
-                <td className="p-5 font-medium">{s.entitiesCount ?? 0}</td>
-                <td className="p-5">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => handleViewDetails(s)}
-                    className="gap-1.5 bg-white/10 hover:bg-white/20 rounded-lg h-8 text-xs"
-                  >
-                    <FileSearch size={12} /> Ver detalhes
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <ScanDetailSheet scan={selectedScan} open={sheetOpen} onOpenChange={setSheetOpen} />
-    </div>
-  )
+  return <section className="surface-card overflow-hidden"><div className="flex items-center justify-between border-b border-slate-100 p-6"><div><p className="eyebrow">Registros</p><h2 className="mt-1 text-lg font-semibold text-slate-950">Histórico de scans</h2></div><Button variant="outline" onClick={refresh} disabled={refreshing} className="h-10 gap-2 rounded-xl border-slate-200 bg-white text-slate-700"><RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} /> Atualizar</Button></div><div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b border-slate-100 bg-slate-50 text-xs text-slate-500"><tr><th className="p-4 pl-6 font-semibold">Data e hora</th><th className="p-4 font-semibold">Status</th><th className="p-4 font-semibold">Score</th><th className="p-4 font-semibold">Telas</th><th className="p-4 pr-6 text-right font-semibold">Ações</th></tr></thead><tbody className="divide-y divide-slate-100">{scans.map((scan) => <tr key={scan.id} onClick={() => onSelectScan?.(scan.id)} className={`cursor-pointer transition hover:bg-blue-50/50 ${scan.id === selectedScanId ? 'bg-blue-50/70' : ''}`}><td className="p-4 pl-6 text-slate-600">{new Date(scan.created).toLocaleString('pt-BR')}</td><td className="p-4"><ScanStatusBadge status={scan.status} /></td><td className="p-4 font-semibold text-slate-800">{scan.report?.wcag?.score ?? '—'}</td><td className="p-4 text-slate-600">{scan.entitiesCount ?? 0}</td><td className="p-4 pr-6 text-right"><Button size="sm" variant="ghost" onClick={(event) => { event.stopPropagation(); setDetailScan(scan); setSheetOpen(true) }} className="h-8 gap-1.5 rounded-lg text-xs text-slate-600 hover:bg-white"><FileSearch size={13} /> Detalhes</Button></td></tr>)}</tbody></table></div><ScanDetailSheet scan={detailScan} open={sheetOpen} onOpenChange={setSheetOpen} /></section>
 }

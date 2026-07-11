@@ -250,7 +250,7 @@ app.get('/api/relationships', requireAuth, async (req, res) => {
   res.json(result.rows.map(rowRelationship))
 })
 
-app.post('/backend/v1/scanner', async (req, res) => {
+app.post(['/backend/v1/scanner', '/backend/v1/api/scanner'], async (req, res) => {
   const header = req.headers.authorization || ''
   const token = header.startsWith('Bearer ') ? header.slice(7) : ''
   if (!token) return res.status(401).json({ error: 'Token ausente' })
@@ -274,21 +274,24 @@ app.post('/backend/v1/scanner', async (req, res) => {
   res.json({ scanId: result.rows[0].id })
 })
 
-app.get('/backend/v1/scanner/status/:scanId', async (req, res) => {
-  const header = req.headers.authorization || ''
-  const token = header.startsWith('Bearer ') ? header.slice(7) : ''
-  if (!token) return res.status(401).json({ error: 'Token ausente' })
-  const result = await pool.query('SELECT * FROM scans WHERE id = $1', [req.params.scanId])
-  const scan = result.rows[0]
-  if (!scan) return res.status(404).json({ error: 'Scan nao encontrado' })
-  if (scan.token !== token) return res.status(401).json({ error: 'Token invalido' })
-  res.json({
-    scanId: scan.id,
-    status: scan.status,
-    entitiesCount: scan.entities_count || 0,
-    errorMessage: scan.error_message || null,
-  })
-})
+app.get(
+  ['/backend/v1/scanner/status/:scanId', '/backend/v1/api/scanner/status/:scanId'],
+  async (req, res) => {
+    const header = req.headers.authorization || ''
+    const token = header.startsWith('Bearer ') ? header.slice(7) : ''
+    if (!token) return res.status(401).json({ error: 'Token ausente' })
+    const result = await pool.query('SELECT * FROM scans WHERE id = $1', [req.params.scanId])
+    const scan = result.rows[0]
+    if (!scan) return res.status(404).json({ error: 'Scan nao encontrado' })
+    if (scan.token !== token) return res.status(401).json({ error: 'Token invalido' })
+    res.json({
+      scanId: scan.id,
+      status: scan.status,
+      entitiesCount: scan.entities_count || 0,
+      errorMessage: scan.error_message || null,
+    })
+  },
+)
 
 app.post('/backend/v1/manual-scan', requireAuth, async (req, res) => {
   const { projectId, data = {} } = req.body || {}

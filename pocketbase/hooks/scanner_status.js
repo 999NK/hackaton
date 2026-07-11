@@ -1,4 +1,4 @@
-routerAdd('GET', '/backend/v1/scanner/status/{scanId}', (e) => {
+function scannerStatus(e) {
   const authHeader = e.request.header.get('Authorization') || ''
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
 
@@ -28,4 +28,7 @@ routerAdd('GET', '/backend/v1/scanner/status/{scanId}', (e) => {
     entitiesCount: entitiesCount,
     errorMessage: errorMessage,
   })
-})
+}
+
+routerAdd('GET', '/backend/v1/scanner/status/{scanId}', scannerStatus)
+routerAdd('GET', '/backend/v1/api/scanner/status/{scanId}', scannerStatus)

@@ -266,8 +266,18 @@ function validateSemanticMap(artifact, uploadScanId) {
     refs.add(id)
   }
   for (const [index, relationship] of (sam?.relationships || []).entries()) {
-    const source = relationship.source || relationship.sourceEntityId || relationship.from || relationship.fromEntityId
-    const target = relationship.target || relationship.targetEntityId || relationship.to || relationship.toEntityId
+    const source =
+      relationship.source ||
+      relationship.sourceId ||
+      relationship.sourceEntityId ||
+      relationship.from ||
+      relationship.fromEntityId
+    const target =
+      relationship.target ||
+      relationship.targetId ||
+      relationship.targetEntityId ||
+      relationship.to ||
+      relationship.toEntityId
     if (!source || !target) errors.push(`Relacionamento ${index} sem origem/destino`)
     if (source && !refs.has(source)) errors.push(`Relacionamento ${index} referencia origem inexistente: ${source}`)
     if (target && !refs.has(target)) errors.push(`Relacionamento ${index} referencia destino inexistente: ${target}`)
@@ -300,6 +310,7 @@ function validateUploadManifest(artifact, artifacts) {
   const receivedByName = new Map(artifacts.map((item) => [item.filename, item]))
   for (const file of files) {
     const name = normalizeFilename(file.filename || file.name)
+    if (name === 'upload-manifest.json') continue
     const received = receivedByName.get(name)
     if (!received) continue
     if (file.sha256 && received.sha256 !== file.sha256) errors.push(`Hash divergente: ${name}`)
@@ -451,8 +462,18 @@ async function processSemanticMap(client, scanId, sam) {
   }
   let relationshipCount = 0
   for (const relationship of sam.relationships || []) {
-    const sourceKey = relationship.source || relationship.sourceEntityId || relationship.from || relationship.fromEntityId
-    const targetKey = relationship.target || relationship.targetEntityId || relationship.to || relationship.toEntityId
+    const sourceKey =
+      relationship.source ||
+      relationship.sourceId ||
+      relationship.sourceEntityId ||
+      relationship.from ||
+      relationship.fromEntityId
+    const targetKey =
+      relationship.target ||
+      relationship.targetId ||
+      relationship.targetEntityId ||
+      relationship.to ||
+      relationship.toEntityId
     const sourceId = idMap.get(sourceKey)
     const targetId = idMap.get(targetKey)
     if (!sourceId || !targetId) continue

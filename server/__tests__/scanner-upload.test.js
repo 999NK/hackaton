@@ -661,6 +661,51 @@ describe('scanner upload edge cases', () => {
     assert.equal(samResult.valid, false)
     assert.ok(samResult.errors.some((e) => e.toLowerCase().includes('destino inexistente')))
   })
+
+  it('accepts scanner 0.7 SAM relationships using sourceId and targetId', async () => {
+    const scanId = 'sam-sourceid-targetid'
+    const entries = buildSixArtifactBundle(scanId, {
+      contentOverrides: {
+        '.skip-sam.json': {
+          scanId,
+          entities: [
+            { id: 'route-home', type: 'ROUTE', name: 'Home', path: '/' },
+            { id: 'screen-home', type: 'SCREEN', name: 'Home screen', path: '/' },
+          ],
+          relationships: [{ sourceId: 'route-home', targetId: 'screen-home', type: 'CONTAINS' }],
+        },
+      },
+    })
+    const response = await postMultipart('/backend/v1/api/scanner', project.token, { scanId, entries })
+    const body = await response.json()
+    assert.equal(body.status, 'complete')
+    const relationships = await pool.query('SELECT count(*)::int AS n FROM relationships WHERE scan_id = $1', [
+      body.scanId,
+    ])
+    assert.equal(relationships.rows[0].n, 1)
+  })
+
+  it('does not self-validate upload-manifest hash and size', async () => {
+    const scanId = 'manifest-self-reference'
+    const entries = buildSixArtifactBundle(scanId)
+    const originalManifest = JSON.parse(entries.find((e) => e.filename === 'upload-manifest.json').raw)
+    originalManifest.files = originalManifest.files.map((file) =>
+      file.filename === 'upload-manifest.json'
+        ? { ...file, sizeBytes: 1, sha256: '0'.repeat(64) }
+        : file,
+    )
+    originalManifest.artifacts = originalManifest.files
+    const manifestEntry = artifactEntry('upload-manifest.json', originalManifest)
+    const finalEntries = [...entries.filter((e) => e.filename !== 'upload-manifest.json'), manifestEntry]
+
+    const response = await postMultipart('/backend/v1/api/scanner', project.token, {
+      scanId,
+      entries: finalEntries,
+    })
+    const body = await response.json()
+    assert.equal(body.status, 'complete')
+    assert.deepEqual(body.hashMismatches, [])
+  })
 })
 
 describe('scanner read endpoints', () => {

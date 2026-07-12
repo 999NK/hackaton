@@ -14,8 +14,8 @@ Depois do clone, localize a pasta que contém o arquivo SKILL.md e instale essa 
 
 2. Leia integralmente o arquivo SKILL.md e siga todas as etapas da skill. Analise a estrutura real deste projeto, mapeie telas, ações e rotas, execute a auditoria WCAG local, calcule o score, gere fluxos guiados e valide o relatório. Não envie código-fonte.
 
-3. Use estas credenciais do projeto Skip Cloud:
-npx @skip-ai/scanner --token=${project.token} --url=${endpoint}
+3. Use estas credenciais do projeto Skip Cloud com a versao mais recente do NPX:
+npx @skip-ai/scanner@latest --token=${project.token} --url=${endpoint}
 
 4. Invoque a skill Skip instalada e execute o fluxo completo agora. Ao terminar, envie o relatório enriquecido para o Skip Cloud e me apresente um resumo com telas mapeadas, score WCAG, violações prioritárias e fluxos guiados.
 

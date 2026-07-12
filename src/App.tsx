@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from '@/components/ui/toaster'
 import { Toaster as Sonner } from '@/components/ui/sonner'
@@ -10,6 +11,16 @@ import Register from './pages/Register'
 import NotFound from './pages/NotFound'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './hooks/use-auth'
+
+const RuleDetailLazy = lazy(() => import('./pages/RuleDetail'))
+
+function RuleDetailPage() {
+  return (
+    <Suspense fallback={<div className="page-shell py-24 text-center text-slate-400">Carregando...</div>}>
+      <RuleDetailLazy />
+    </Suspense>
+  )
+}
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, loading } = useAuth()
@@ -47,6 +58,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <ProjectDetail />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/:projectId/rule/:ruleId"
+              element={
+                <ProtectedRoute>
+                  <RuleDetailPage />
                 </ProtectedRoute>
               }
             />

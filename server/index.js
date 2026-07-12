@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
 import express from 'express'
 import jwt from 'jsonwebtoken'
-import { migrate, pool, rowEntity, rowProject, rowRelationship, rowScan } from './db.js'
+import { migrate, pool, rowArtifact, rowEntity, rowFinding, rowProject, rowRelationship, rowScan } from './db.js'
 import {
   getScannerToken,
   normalizeUpload,
@@ -94,6 +94,54 @@ async function ensureProjectAccess(projectId, userId) {
     userId,
   ])
   return result.rows[0] || null
+}
+
+// Dual auth for scan read endpoints: accepts either a dashboard JWT (owner-scoped)
+// or a project token (scanner/tooling). Sets req.authKind and req.user|req.project.
+async function requireScanAccess(req, res, next) {
+  const header = req.headers.authorization || ''
+  const token = header.startsWith('Bearer ') ? header.slice(7).trim() : ''
+  if (!token) return res.status(401).json({ error: 'auth required' })
+  try {
+    const payload = jwt.verify(token, jwtSecret)
+    const result = await pool.query('SELECT * FROM users WHERE id = $1', [payload.sub])
+    if (!result.rows[0]) return res.status(401).json({ error: 'auth required' })
+    req.user = result.rows[0]
+    req.authKind = 'jwt'
+    return next()
+  } catch {
+    // not a valid JWT — try as a project token
+  }
+  const project = await findProjectByToken(token)
+  if (project) {
+    req.project = project
+    req.authKind = 'token'
+    return next()
+  }
+  return res.status(401).json({ error: 'auth required' })
+}
+
+// Loads a scan by internal id OR external_scan_id, scoped to the caller's auth.
+// JWT callers must own the project; token callers must hold the project token.
+// Returns { scan, project } or null (caller responds 404 to avoid leaking existence).
+async function loadOwnedScan(scanId, req) {
+  const result = await pool.query(
+    `SELECT s.*, p.id AS project_id, p.owner_id, p.token AS project_token
+     FROM scans s
+     JOIN projects p ON p.id = s.project_id
+     WHERE s.id = $1 OR s.external_scan_id = $1`,
+    [scanId],
+  )
+  const row = result.rows[0]
+  if (!row) return null
+  if (req.authKind === 'jwt') {
+    if (row.owner_id !== req.user.id) return null
+  } else {
+    const token = String(req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim()
+    if (row.project_token !== token) return null
+  }
+  const { project_id, owner_id, project_token, ...scan } = row
+  return { scan, project: { id: project_id, ownerId: owner_id, token: project_token } }
 }
 
 app.get('/api/health', async (_req, res) => {
@@ -256,6 +304,156 @@ app.get('/api/relationships', requireAuth, async (req, res) => {
   )
   res.json(result.rows.map(rowRelationship))
 })
+
+// Scan read endpoints (dual-auth: JWT or project token).
+const SCAN_PATHS = [
+  '/api/scans/:scanId',
+  '/backend/v1/scans/:scanId',
+  '/backend/v1/api/scans/:scanId',
+]
+
+function parsePagination(query) {
+  const page = Math.max(1, Number(query.page) || 1)
+  const pageSize = Math.min(100, Math.max(1, Number(query.pageSize) || 25))
+  return { page, pageSize, offset: (page - 1) * pageSize }
+}
+
+function issueOrderBy(sortBy, sortOrder) {
+  const dir = String(sortOrder).toLowerCase() === 'desc' ? 'DESC' : 'ASC'
+  const column =
+    sortBy === 'ruleId'
+      ? 'rule_id'
+      : sortBy === 'filePath'
+        ? 'file_path'
+        : sortBy === 'occurrenceCount'
+          ? 'occurrence_count'
+          : null
+  if (column) return `${column} ${dir}`
+  // default: severity rank (critical first), then rule_id as tiebreaker
+  const dirSecondary = sortBy == null && dir === 'DESC' ? 'DESC' : 'ASC'
+  return `CASE severity
+      WHEN 'critical' THEN 1 WHEN 'serious' THEN 2 WHEN 'moderate' THEN 3
+      WHEN 'minor' THEN 4 WHEN 'unknown' THEN 5 ELSE 6 END ${dir}, rule_id ${dirSecondary}`
+}
+
+app.get(SCAN_PATHS, requireScanAccess, async (req, res) => {
+  const loaded = await loadOwnedScan(req.params.scanId, req)
+  if (!loaded) return res.status(404).json({ error: 'scan not found' })
+  res.json(rowScan(loaded.scan))
+})
+
+app.get(
+  [...SCAN_PATHS.map((p) => `${p}/artifacts`)],
+  requireScanAccess,
+  async (req, res) => {
+    const loaded = await loadOwnedScan(req.params.scanId, req)
+    if (!loaded) return res.status(404).json({ error: 'scan not found' })
+    const result = await pool.query(
+      'SELECT * FROM scan_artifacts WHERE scan_id = $1 ORDER BY created',
+      [loaded.scan.id],
+    )
+    res.json({ scanId: loaded.scan.id, artifacts: result.rows.map(rowArtifact) })
+  },
+)
+
+async function respondArtifactByType(req, res, artifactType, label) {
+  const loaded = await loadOwnedScan(req.params.scanId, req)
+  if (!loaded) return res.status(404).json({ error: 'scan not found' })
+  const result = await pool.query(
+    'SELECT * FROM scan_artifacts WHERE scan_id = $1 AND artifact_type = $2 ORDER BY created LIMIT 1',
+    [loaded.scan.id, artifactType],
+  )
+  if (!result.rows[0]) {
+    return res.status(404).json({ error: `artefato ${label} nao encontrado` })
+  }
+  const artifact = rowArtifact(result.rows[0])
+  res.json({
+    scanId: loaded.scan.id,
+    artifactType: artifact.artifactType,
+    filename: artifact.filename,
+    artifact,
+    content: artifact.rawContent,
+  })
+}
+
+app.get(
+  [...SCAN_PATHS.map((p) => `${p}/artifacts/semantic-map`)],
+  requireScanAccess,
+  async (req, res) => respondArtifactByType(req, res, 'semantic-map', 'semantic-map'),
+)
+
+app.get(
+  [...SCAN_PATHS.map((p) => `${p}/artifacts/wcag-audit`)],
+  requireScanAccess,
+  async (req, res) => respondArtifactByType(req, res, 'wcag-audit', 'wcag-audit'),
+)
+
+async function respondIssues(req, res, ruleIdFilter) {
+  const loaded = await loadOwnedScan(req.params.scanId, req)
+  if (!loaded) return res.status(404).json({ error: 'scan not found' })
+
+  const { page, pageSize, offset } = parsePagination(req.query)
+  const where = ['scan_id = $1']
+  const params = [loaded.scan.id]
+  const pushParam = (value) => {
+    params.push(value)
+    return `$${params.length}`
+  }
+
+  if (ruleIdFilter) {
+    where.push(`rule_id = ${pushParam(ruleIdFilter)}`)
+  } else if (req.query.ruleId) {
+    where.push(`rule_id = ${pushParam(String(req.query.ruleId))}`)
+  }
+  if (req.query.severity) {
+    where.push(`severity = ${pushParam(String(req.query.severity).toLowerCase())}`)
+  }
+  if (req.query.file) {
+    where.push(`file_path = ${pushParam(String(req.query.file))}`)
+  }
+  if (req.query.search) {
+    const like = `%${String(req.query.search)}%`
+    where.push(
+      `(rule_id ILIKE ${pushParam(like)} OR selector ILIKE ${pushParam(like)} OR suggestion ILIKE ${pushParam(like)})`,
+    )
+  }
+
+  const orderSql = issueOrderBy(req.query.sortBy, req.query.sortOrder)
+
+  const countResult = await pool.query(
+    `SELECT count(*)::int AS total FROM wcag_findings WHERE ${where.join(' AND ')}`,
+    params,
+  )
+  const totalItems = countResult.rows[0]?.total || 0
+
+  params.push(pageSize, offset)
+  const listResult = await pool.query(
+    `SELECT * FROM wcag_findings WHERE ${where.join(' AND ')} ORDER BY ${orderSql} LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params,
+  )
+
+  res.json({
+    items: listResult.rows.map(rowFinding),
+    pagination: {
+      page,
+      pageSize,
+      totalItems,
+      totalPages: Math.max(0, Math.ceil(totalItems / pageSize)),
+    },
+  })
+}
+
+app.get(
+  [...SCAN_PATHS.map((p) => `${p}/issues`)],
+  requireScanAccess,
+  async (req, res) => respondIssues(req, res, null),
+)
+
+app.get(
+  [...SCAN_PATHS.map((p) => `${p}/issues/:ruleId`)],
+  requireScanAccess,
+  async (req, res) => respondIssues(req, res, decodeURIComponent(req.params.ruleId)),
+)
 
 const scannerRoutes = ['/api/scanner', '/backend/v1/scanner', '/backend/v1/api/scanner']
 

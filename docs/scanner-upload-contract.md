@@ -201,6 +201,70 @@ Resposta de sucesso aceita:
 
 Envio legado com apenas `.skip-report.json` retorna `partial` e lista os obrigatorios ausentes, sem inventar SAM, auditoria WCAG ou score final.
 
+## Endpoints de leitura
+
+Os endpoints de leitura aceitam dois modos de autenticacao:
+
+- JWT do dashboard em `Authorization: Bearer <jwt>`, limitado ao dono do projeto.
+- Token do projeto em `Authorization: Bearer <project-token>`, para tooling/scanner.
+
+Rotas disponiveis:
+
+```http
+GET /api/scans/:scanId
+GET /backend/v1/scans/:scanId
+GET /backend/v1/api/scans/:scanId
+
+GET /api/scans/:scanId/artifacts
+GET /backend/v1/scans/:scanId/artifacts
+GET /backend/v1/api/scans/:scanId/artifacts
+
+GET /api/scans/:scanId/artifacts/semantic-map
+GET /backend/v1/scans/:scanId/artifacts/semantic-map
+GET /backend/v1/api/scans/:scanId/artifacts/semantic-map
+
+GET /api/scans/:scanId/artifacts/wcag-audit
+GET /backend/v1/scans/:scanId/artifacts/wcag-audit
+GET /backend/v1/api/scans/:scanId/artifacts/wcag-audit
+
+GET /api/scans/:scanId/issues
+GET /backend/v1/scans/:scanId/issues
+GET /backend/v1/api/scans/:scanId/issues
+
+GET /api/scans/:scanId/issues/:ruleId
+GET /backend/v1/scans/:scanId/issues/:ruleId
+GET /backend/v1/api/scans/:scanId/issues/:ruleId
+```
+
+`scanId` pode ser o id interno do banco ou o `external_scan_id` recebido do scanner.
+
+### Paginacao e filtros de issues
+
+Parametros:
+
+- `page`
+- `pageSize`
+- `severity`
+- `ruleId`
+- `file`
+- `search`
+- `sortBy`
+- `sortOrder`
+
+Resposta:
+
+```json
+{
+  "items": [],
+  "pagination": {
+    "page": 1,
+    "pageSize": 25,
+    "totalItems": 0,
+    "totalPages": 0
+  }
+}
+```
+
 ## Seguranca
 
 - Token nao e persistido em novos scans.
@@ -224,3 +288,26 @@ O teste `server/__tests__/scanner-upload.test.js` cobre:
 - processamento de entidades e relacionamentos;
 - persistencia de artefatos;
 - persistencia de findings WCAG com `serious` e `unknown`.
+- resposta detalhada por artefato;
+- hash divergente;
+- tamanho divergente;
+- scanId divergente no SAM;
+- retry idempotente;
+- auditoria amostrada com `wcagStatus: "partial"`;
+- `.skip-wcag-audit.cjs` persistido como dado e nunca executado;
+- SAM vazio;
+- relacionamento invalido;
+- endpoints de leitura de scan, artefatos, SAM, auditoria e issues;
+- paginacao e filtros de issues.
+
+Tambem foi validado manualmente com `@skip-ai/scanner@0.7.0` usando o fluxo:
+
+```bash
+npx @skip-ai/scanner@0.7.0 scan . \
+  --generate-sam \
+  --validate-sam \
+  --generate-wcag \
+  --validate \
+  --send \
+  --url=https://hackaton-ecru.vercel.app/backend/v1
+```

@@ -103,3 +103,44 @@ export function rowRelationship(row) {
     updated: row.updated,
   }
 }
+
+export function rowArtifact(row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    scan: row.scan_id,
+    artifactType: row.artifact_type,
+    filename: row.filename,
+    contentType: row.content_type ?? '',
+    rawContent: row.raw_content,
+    sizeBytes: row.size_bytes ?? 0,
+    sha256: row.sha256 ?? '',
+    required: Boolean(row.required),
+    validationStatus: row.validation_status ?? 'not_started',
+    processingStatus: row.processing_status ?? 'not_started',
+    metadata: row.metadata ?? {},
+    created: row.created,
+    updated: row.updated,
+  }
+}
+
+export function rowFinding(row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    scan: row.scan_id,
+    fingerprint: row.fingerprint ?? '',
+    ruleId: row.rule_id ?? '',
+    severity: row.severity ?? 'unknown',
+    filePath: row.file_path ?? '',
+    line: row.line ?? 0,
+    column: row.column_number ?? 0,
+    selector: row.selector ?? '',
+    occurrenceCount: row.occurrence_count ?? 1,
+    suggestion: row.suggestion ?? '',
+    affectedScreens: row.affected_screens ?? [],
+    payload: row.payload ?? {},
+    created: row.created,
+    updated: row.updated,
+  }
+}

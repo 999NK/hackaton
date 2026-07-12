@@ -384,6 +384,12 @@ function scanStatusFromArtifacts(results) {
 }
 
 async function upsertArtifact(client, scanId, artifact, result) {
+  const rawContent =
+    artifact.content == null
+      ? { text: artifact.rawText || '' }
+      : artifact.contentType.includes('json') || artifact.filename.endsWith('.json')
+        ? artifact.content
+        : { text: artifact.rawText }
   await client.query(
     `INSERT INTO scan_artifacts
        (scan_id, artifact_type, filename, content_type, raw_content, size_bytes, sha256, required, validation_status, processing_status, metadata)
@@ -400,7 +406,7 @@ async function upsertArtifact(client, scanId, artifact, result) {
       artifact.artifactType,
       artifact.filename,
       artifact.contentType,
-      artifact.contentType.includes('json') || artifact.filename.endsWith('.json') ? artifact.content : { text: artifact.rawText },
+      rawContent,
       artifact.sizeBytes,
       artifact.sha256,
       artifact.required ?? REQUIRED_ARTIFACTS.includes(artifact.filename),

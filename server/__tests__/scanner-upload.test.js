@@ -7,6 +7,8 @@ import { pool } from '../db.js'
 let server
 let baseUrl
 let project
+let authToken
+let userId
 
 function textBytes(value) {
   return Buffer.byteLength(value)
@@ -145,6 +147,7 @@ async function cleanup() {
   }
   await pool.query('DELETE FROM scans WHERE project_id = $1', [project.id])
   await pool.query('DELETE FROM projects WHERE id = $1', [project.id])
+  if (userId) await pool.query('DELETE FROM users WHERE id = $1', [userId])
 }
 
 before(async () => {
@@ -152,11 +155,23 @@ before(async () => {
   await new Promise((resolve) => server.once('listening', resolve))
   baseUrl = `http://127.0.0.1:${server.address().port}`
   const token = `test-${crypto.randomUUID()}`
+  const register = await fetch(`${baseUrl}/api/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: `scanner-${crypto.randomUUID()}@example.test`,
+      password: 'test-password',
+    }),
+  })
+  assert.equal(register.status, 201)
+  const auth = await register.json()
+  authToken = auth.token
+  userId = auth.user.id
   const result = await pool.query(
-    `INSERT INTO projects (name, token, base_url, framework, language)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO projects (name, token, base_url, framework, language, user_id, owner_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $6)
      RETURNING *`,
-    ['Scanner Contract Test', token, 'http://localhost.test', 'vite-react', 'TypeScript'],
+    ['Scanner Contract Test', token, 'http://localhost.test', 'vite-react', 'TypeScript', userId],
   )
   project = result.rows[0]
 })
@@ -272,5 +287,24 @@ describe('scanner upload contract', () => {
     assert.equal(entities.rowCount, 2)
     assert.equal(relationships.rowCount, 1)
     assert.equal(findings.rowCount, 2)
+
+    const dashboardScans = await fetch(`${baseUrl}/api/scans?projectId=${project.id}`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    })
+    assert.equal(dashboardScans.status, 200)
+    const scans = await dashboardScans.json()
+    assert.ok(scans.some((scan) => scan.id === body.scanId && scan.report.wcag.summary.serious === 1))
+
+    const dashboardEntities = await fetch(`${baseUrl}/api/entities?scanId=${body.scanId}`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    })
+    assert.equal(dashboardEntities.status, 200)
+    assert.equal((await dashboardEntities.json()).length, 2)
+
+    const dashboardRelationships = await fetch(`${baseUrl}/api/relationships?scanId=${body.scanId}`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    })
+    assert.equal(dashboardRelationships.status, 200)
+    assert.equal((await dashboardRelationships.json()).length, 1)
   })
 })

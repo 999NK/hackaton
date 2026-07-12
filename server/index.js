@@ -11,6 +11,7 @@ import {
   parseScannerUpload,
   receiveScannerUpload,
 } from './scanner-upload.js'
+import { classifyIntent, interpret } from './widget-nlu.js'
 
 dotenv.config({ quiet: true })
 
@@ -86,6 +87,21 @@ async function latestCompletedScan(projectId) {
     [projectId],
   )
   return result.rows[0] || null
+}
+
+// O widget pode operar sobre um scan parcial (ex.: SAM recebido mas WCAG ainda
+// pendente). Retorna o scan mais recente que tenha entidades semanticas, mesmo
+// que o status geral seja PARTIAL.
+async function latestScanForWidget(projectId) {
+  const result = await pool.query(
+    `SELECT s.* FROM scans s
+     JOIN semantic_entities e ON e.scan_id = s.id
+     WHERE s.project_id = $1
+     ORDER BY s.created DESC
+     LIMIT 1`,
+    [projectId],
+  )
+  return result.rows[0] || (await latestCompletedScan(projectId))
 }
 
 async function ensureProjectAccess(projectId, userId) {
@@ -606,7 +622,7 @@ app.post('/backend/v1/testing/generate', requireAuth, async (_req, res) => {
 
 app.options('/backend/v1/widget/:endpoint', async (req, res) => {
   const project = await findProjectByToken(req.query.token || '')
-  projectCors(project, req, res, req.params.endpoint === 'command' ? 'POST' : 'GET')
+  projectCors(project, req, res, ['command', 'tts', 'screen'].includes(req.params.endpoint) ? 'POST' : 'GET')
   res.status(204).end()
 })
 
@@ -614,7 +630,7 @@ app.get('/backend/v1/widget/config', async (req, res) => {
   const project = await findProjectByToken(req.query.token || '')
   projectCors(project, req, res, 'GET')
   if (!project) return res.status(401).json({ error: 'Token invalido' })
-  const scan = await latestCompletedScan(project.id)
+  const scan = await latestScanForWidget(project.id)
   if (!scan) {
     return res.json({ project: { name: project.name, baseUrl: project.base_url }, entities: [] })
   }
@@ -631,7 +647,7 @@ app.get('/backend/v1/widget/sitemap', async (req, res) => {
   const project = await findProjectByToken(req.query.token || '')
   projectCors(project, req, res, 'GET')
   if (!project) return res.status(401).json({ error: 'Token invalido' })
-  const scan = await latestCompletedScan(project.id)
+  const scan = await latestScanForWidget(project.id)
   if (!scan) return res.json({ routes: [] })
   const result = await pool.query(
     "SELECT * FROM semantic_entities WHERE scan_id = $1 AND type = 'ROUTE' ORDER BY name LIMIT 1000",
@@ -644,7 +660,7 @@ app.get('/backend/v1/widget/entities', async (req, res) => {
   const project = await findProjectByToken(req.query.token || '')
   projectCors(project, req, res, 'GET')
   if (!project) return res.status(401).json({ error: 'Token invalido' })
-  const scan = await latestCompletedScan(project.id)
+  const scan = await latestScanForWidget(project.id)
   if (!scan) return res.json({ entities: [] })
   const currentPath = req.query.path || ''
   let result
@@ -666,31 +682,137 @@ app.get('/backend/v1/widget/entities', async (req, res) => {
   res.json({ entities: result.rows.map(rowEntity) })
 })
 
+async function loadScanContext(projectId) {
+  const scan = await latestScanForWidget(projectId)
+  if (!scan) return null
+  const [entResult, relResult] = await Promise.all([
+    pool.query('SELECT * FROM semantic_entities WHERE scan_id = $1 LIMIT 1000', [scan.id]),
+    pool.query('SELECT * FROM relationships WHERE scan_id = $1', [scan.id]),
+  ])
+  return {
+    scan,
+    entities: entResult.rows.map(rowEntity),
+    relationships: relResult.rows.map(rowRelationship),
+  }
+}
+
 app.post('/backend/v1/widget/command', async (req, res) => {
   const project = await findProjectByToken(req.query.token || '')
   projectCors(project, req, res, 'POST')
   if (!project) return res.status(401).json({ error: 'Token invalido' })
-  const transcript = String(req.body?.transcript || '').trim().toLowerCase()
+  const transcript = String(req.body?.transcript || '').trim()
   if (!transcript) return res.status(400).json({ error: 'transcript obrigatorio' })
-  const scan = await latestCompletedScan(project.id)
-  if (!scan) return res.status(404).json({ error: 'Nenhum scan completado encontrado' })
-  const result = await pool.query('SELECT * FROM semantic_entities WHERE scan_id = $1 LIMIT 1000', [
-    scan.id,
-  ])
-  const matches = result.rows
-    .map(rowEntity)
-    .map((entity) => {
-      const haystack = [entity.name, entity.slug, entity.description, ...(entity.semanticLabels || [])]
-        .join(' ')
-        .toLowerCase()
-      const confidence = haystack.includes(transcript) ? 0.9 : transcript.includes(entity.name.toLowerCase()) ? 0.75 : 0
-      return { ...entity, confidence }
-    })
-    .filter((entity) => entity.confidence > 0)
-    .sort((a, b) => b.confidence - a.confidence)
-    .slice(0, 3)
-  res.json({ action: 'NAVIGATE', matches, fillValue: '' })
+  const ctx = await loadScanContext(project.id)
+  if (!ctx) return res.status(404).json({ error: 'Nenhum scan completado encontrado' })
+  const response = interpret({
+    transcript,
+    path: String(req.body?.path || ''),
+    entities: ctx.entities,
+    relationships: ctx.relationships,
+  })
+  res.json(response)
 })
+
+// Normaliza um rotulo cru (ex.: "btn-submit", "input#email") em uma frase
+// falada em portugues, prefixando o papel do elemento. Deterministico, sem IA.
+app.post('/backend/v1/widget/tts', async (req, res) => {
+  const project = await findProjectByToken(req.query.token || '')
+  projectCors(project, req, res, 'POST')
+  if (!project) return res.status(401).json({ error: 'Token invalido' })
+  const text = String(req.body?.text || req.body?.label || '').replace(/\s+/g, ' ').trim()
+  const role = String(req.body?.role || '').toLowerCase()
+  if (!text) return res.json({ speech: '' })
+  const cleaned = text
+    .replace(/[.#:()>[\]{}]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const prefix =
+    {
+      button: 'Botão: ',
+      a: 'Link: ',
+      link: 'Link: ',
+      input: 'Campo: ',
+      textarea: 'Campo: ',
+      select: 'Lista: ',
+      label: 'Rótulo: ',
+      h1: 'Título: ',
+      h2: 'Título: ',
+      h3: 'Título: ',
+      img: 'Imagem: ',
+    }[role] || ''
+  res.json({ speech: (prefix + cleaned).trim() })
+})
+
+// Analise deterministica de tela a partir do DOM coletado pelo widget + SAM.
+// Sem provedor de IA: resume textos visiveis, lista campos/acoes e responde a
+// perguntas por extracao de palavras-chave contra o conteudo visivel.
+app.post('/backend/v1/widget/screen', async (req, res) => {
+  const project = await findProjectByToken(req.query.token || '')
+  projectCors(project, req, res, 'POST')
+  if (!project) return res.status(401).json({ error: 'Token invalido' })
+  const domText = String(req.body?.domText || '')
+  const question = String(req.body?.question || '').trim().toLowerCase()
+  const path = String(req.body?.path || '')
+
+  const lines = domText.split('\n').map((l) => l.trim()).filter(Boolean)
+  const visibleText = []
+  const fields = []
+  const actions = []
+  for (const line of lines) {
+    const idx = line.indexOf(':')
+    if (idx < 0) {
+      if (line.length < 400) visibleText.push(line)
+      continue
+    }
+    const tag = line.slice(0, idx).toLowerCase()
+    const value = line.slice(idx + 1).trim()
+    if (!value) continue
+    if (['button', 'a'].includes(tag)) actions.push(value)
+    else if (['input', 'textarea', 'select', 'label'].includes(tag)) fields.push(value)
+    else if (value.length < 400) visibleText.push(value)
+  }
+
+  // Enriquece com acoes/rotas do SAM para a rota atual quando disponivel.
+  const ctx = await loadScanContext(project.id)
+  if (ctx) {
+    for (const e of ctx.entities) {
+      if (e.path && path && e.path === path) visibleText.push(e.name)
+      if (['LINK', 'BUTTON'].includes(e.type) && !actions.includes(e.name)) actions.push(e.name)
+    }
+  }
+
+  // Resposta por correspondencia de palavras-chave da pergunta nos textos.
+  let answer = ''
+  if (question) {
+    const qTokens = question.split(/\s+/).filter((t) => t.length > 2)
+    const scored = visibleText
+      .map((t) => ({ t, hits: qTokens.filter((q) => t.toLowerCase().includes(q)).length }))
+      .filter((x) => x.hits > 0)
+      .sort((a, b) => b.hits - a.hits)
+    if (scored.length) answer = scored.slice(0, 3).map((x) => x.t).join('. ')
+  }
+
+  const possibleQuestions = []
+  if (fields.length) possibleQuestions.push('Quais campos preciso preencher?')
+  if (actions.length) possibleQuestions.push('O que posso clicar nesta tela?')
+  if (visibleText.length) possibleQuestions.push('O que esta tela faz?')
+
+  res.json({
+    analysis: {
+      summary: visibleText.slice(0, 3).join(' ') || 'Tela sem conteúdo textual identificável.',
+      visibleText: visibleText.slice(0, 12),
+      fields: dedupe(fields).slice(0, 12),
+      actions: dedupe(actions).slice(0, 12),
+      possibleQuestions,
+      warnings: [],
+    },
+    answer,
+  })
+})
+
+function dedupe(arr) {
+  return Array.from(new Set(arr.map((v) => String(v).trim()).filter(Boolean)))
+}
 
 app.use((err, _req, res, _next) => {
   console.error(err)

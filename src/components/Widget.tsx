@@ -40,7 +40,7 @@ export function AssistiveWidget() {
   useEffect(() => {
     const style = document.createElement('style')
     style.dataset.skipInternal = 'true'
-    style.textContent = `.skip-internal-highlight a,.skip-internal-highlight button,.skip-internal-highlight input,.skip-internal-highlight select,.skip-internal-highlight textarea{outline:3px solid #2563eb!important;outline-offset:3px!important}.skip-reduced-motion *{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}`
+    style.textContent = `.skip-internal-highlight a[href],.skip-internal-highlight button:not([disabled]),.skip-internal-highlight input:not([type=hidden]),.skip-internal-highlight textarea,.skip-internal-highlight select,.skip-internal-highlight [role=button],.skip-internal-highlight [role=link],.skip-internal-highlight [role=combobox],.skip-internal-highlight [contenteditable=true],.skip-internal-highlight summary,.skip-internal-highlight [tabindex]:not([tabindex="-1"]){outline:3px solid #2563eb!important;outline-offset:3px!important}.skip-reduced-motion *{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}`
     document.head.appendChild(style)
     return () => { style.remove(); window.speechSynthesis?.cancel(); recognition.current?.stop?.() }
   }, [])
@@ -59,7 +59,14 @@ export function AssistiveWidget() {
     if (reading) { window.speechSynthesis.cancel(); setReading(false); return record('Leitura pausada') }
     const content = text || document.querySelector('main')?.textContent || document.body.innerText
     const utterance = new SpeechSynthesisUtterance(content.replace(/\s+/g, ' ').slice(0, 8000))
-    utterance.lang = 'pt-BR'; utterance.rate = 0.95; utterance.onend = () => setReading(false)
+    utterance.lang = 'pt-BR'; utterance.rate = 0.95
+    // Seleciona voz pt-BR explicitamente para evitar fallback p/ ingles.
+    try {
+      const voices = window.speechSynthesis.getVoices() || []
+      const match = voices.find((v) => String(v.lang || '').toLowerCase().startsWith('pt'))
+      if (match) utterance.voice = match
+    } catch { /* noop */ }
+    utterance.onend = () => setReading(false)
     window.speechSynthesis.cancel(); window.speechSynthesis.speak(utterance); setReading(true); record('Leitura da página iniciada')
   }
 
@@ -75,14 +82,39 @@ export function AssistiveWidget() {
     instance.start()
   }
 
-  const executeVoice = (command: string) => {
+  const executeVoice = async (command: string) => {
     const normalized = command.toLowerCase().trim(); record(`Voz: “${command}”`)
+    // Comandos simples locais (resposta imediata).
     if (normalized.includes('aumentar fonte')) return setFontScale((v) => Math.min(140, v + 10))
     if (normalized.includes('diminuir fonte')) return setFontScale((v) => Math.max(80, v - 10))
     if (normalized.includes('ler página') || normalized.includes('leia a página')) return speak()
     if (normalized.includes('contraste')) return setContrast((v) => !v)
-    const target = collectInteractive().find((item) => normalized.includes(item.label.toLowerCase()) || item.label.toLowerCase().includes(normalized))
-    if (target) { target.element.click(); target.element.focus(); record(`Aberto: ${target.label}`) } else setMessage(`Não encontrei “${command}” nesta tela`)
+    // Demais comandos: usa o motor NLU do servidor (fonte de verdade).
+    try {
+      const res = await fetch('/backend/v1/widget/command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript: command, path: window.location.pathname, url: window.location.href }),
+      })
+      const data = await res.json()
+      if (data.action === 'READ') { speak(); return }
+      if (data.action === 'SETTINGS' && /contraste/.test(normalized)) { setContrast((v) => !v); return }
+      const best = (data.matches || []).sort((a: any, b: any) => (b.confidence || 0) - (a.confidence || 0))[0]
+      if (best) {
+        const el = findElementForMatch(best)
+        if (el) { activateElement(el); record(`Aberto: ${best.name}`) ; return }
+      }
+      // Fallback local no DOM atual.
+      const target = collectInteractive().find((item) => normalized.includes(item.label.toLowerCase()) || item.label.toLowerCase().includes(normalized))
+      if (target) { target.element.click(); target.element.focus(); record(`Aberto: ${target.label}`) }
+      else if ((data.suggestions || []).length) setMessage(`Não encontrei. Você quis dizer: ${(data.suggestions || []).map((s: any) => s.name).join(', ')}?`)
+      else setMessage(`Não encontrei “${command}” nesta tela`)
+    } catch {
+      // Servidor indisponível: mantém o comportamento local.
+      const target = collectInteractive().find((item) => normalized.includes(item.label.toLowerCase()) || item.label.toLowerCase().includes(normalized))
+      if (target) { target.element.click(); target.element.focus(); record(`Aberto: ${target.label}`) }
+      else setMessage(`Não encontrei “${command}” nesta tela`)
+    }
   }
 
   const activate = (item: Item) => { item.element.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'center' }); item.element.focus(); window.setTimeout(() => item.element.click(), 180); record(`Ação executada: ${item.label}`) }
@@ -121,7 +153,41 @@ export function AssistiveWidget() {
 }
 
 function collectInteractive(): Item[] {
-  return Array.from(document.querySelectorAll<HTMLElement>('main a[href], main button:not([disabled]), main input, main select, main textarea')).filter((el) => !el.closest('[role="dialog"]') && el.offsetParent !== null).map((element, index) => ({ element, label: (element.getAttribute('aria-label') || element.textContent || element.getAttribute('placeholder') || element.getAttribute('name') || `Elemento ${index + 1}`).trim().replace(/\s+/g, ' ').slice(0, 70) }))
+  return Array.from(document.querySelectorAll<HTMLElement>('main a[href], main button:not([disabled]), main input, main select, main textarea, main [role="button"], main [role="link"], main [role="combobox"], main summary')).filter((el) => !el.closest('[role="dialog"]') && el.offsetParent !== null).map((element, index) => ({ element, label: (element.getAttribute('aria-label') || element.textContent || element.getAttribute('placeholder') || element.getAttribute('name') || `Elemento ${index + 1}`).trim().replace(/\s+/g, ' ').slice(0, 70) }))
+}
+
+// Localiza um elemento do DOM a partir de uma entidade retornada pelo motor NLU
+// (cssSelector, anchorId, inputName, targetRoute ou nome).
+function findElementForMatch(match: any): HTMLElement | null {
+  const meta = match?.metadata || {}
+  const selectors: string[] = []
+  if (meta.cssSelector) selectors.push(meta.cssSelector)
+  if (meta.anchorId) selectors.push(`#${CSS.escape(meta.anchorId)}`, `[data-skip-anchor="${CSS.escape(meta.anchorId)}"]`)
+  if (meta.inputName) selectors.push(`[name="${CSS.escape(meta.inputName)}"]`)
+  if (meta.targetRoute) selectors.push(`a[href="${CSS.escape(meta.targetRoute)}"]`)
+  for (const sel of selectors) {
+    try {
+      const found = document.querySelector<HTMLElement>(sel)
+      if (found) return found
+    } catch { /* invalid selector */ }
+  }
+  const label = String(meta.label || match?.name || '').toLowerCase().trim()
+  if (!label) return null
+  const candidates = document.querySelectorAll<HTMLElement>('button,a,[role="button"],input,textarea,select,[aria-label]')
+  for (const el of Array.from(candidates)) {
+    const text = (el.getAttribute('aria-label') || el.textContent || el.getAttribute('placeholder') || '').toLowerCase()
+    if (text === label || text.includes(label)) return el
+  }
+  return null
+}
+
+function activateElement(el: HTMLElement) {
+  try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }) } catch { /* noop */ }
+  el.focus({ preventScroll: true })
+  ;['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach((type) => {
+    try { el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window })) } catch { /* noop */ }
+  })
+  el.click()
 }
 
 function WidgetView(props: any) {

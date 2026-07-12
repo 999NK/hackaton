@@ -381,8 +381,39 @@ function toEntityType(type = '') {
 
 function toRelationshipType(type = '') {
   const value = String(type).toUpperCase()
-  if (['CONTAINS', 'CONSUMES', 'TRIGGERS', 'REDIRECTS', 'VALIDATES'].includes(value)) return value
+  if (
+    ['CONTAINS', 'CONSUMES', 'TRIGGERS', 'REDIRECTS', 'VALIDATES', 'FILLS', 'SUBMITS', 'NAVIGATES_TO', 'RENDERS', 'CALLS'].includes(
+      value,
+    )
+  ) {
+    return value
+  }
   return 'CONTAINS'
+}
+
+// O scanner coloca campos acionaveis (cssSelector, kind, intent, targetRoute,
+// inputName...) dentro de entity.metadata.*. Como o backend persiste todo o
+// entity em uma coluna metadata jsonb, o widget acabava lendo esses campos em
+// metadata.metadata.* (aninhamento duplo). Esta funcao achata os campos
+// acionaveis para o nivel de metadata, preservando o original em `raw`.
+function flattenEntityMetadata(entity, externalId) {
+  const inner = entity.metadata && typeof entity.metadata === 'object' ? entity.metadata : {}
+  const kind = inner.kind || entity.kind
+  return {
+    cssSelector: entity.selector || inner.cssSelector || entity.cssSelector || '',
+    kind: kind || (['INPUT', 'TEXTAREA', 'SELECT'].includes(String(entity.type).toUpperCase()) ? 'fill' : ''),
+    intent: inner.intent || entity.intent || '',
+    targetRoute: entity.targetRoute || inner.targetRoute || '',
+    inputName: entity.inputName || inner.inputName || '',
+    inputType: entity.inputType || inner.inputType || '',
+    componentType: inner.componentType || entity.componentType || '',
+    route: entity.route || inner.route || entity.path || '',
+    anchorId: entity.anchorId || inner.anchorId || '',
+    accessibleName: entity.accessibleName || entity.name || '',
+    aliases: Array.isArray(entity.aliases) ? entity.aliases : Array.isArray(inner.aliases) ? inner.aliases : [],
+    externalId,
+    raw: entity,
+  }
 }
 
 function scanStatusFromArtifacts(results) {
@@ -453,7 +484,7 @@ async function processSemanticMap(client, scanId, sam) {
         entity.accessibilityHint || entity.hint || '',
         Number(entity.confidence ?? 0.9),
         JSON.stringify(entity.evidence || []),
-        JSON.stringify({ ...entity, externalId }),
+        JSON.stringify(flattenEntityMetadata(entity, externalId)),
       ],
     )
     idMap.set(externalId, inserted.rows[0].id)

@@ -730,11 +730,11 @@
     if (recognizing) {
       voiceFabEl.classList.add('listening')
       if (micWrap) micWrap.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>'
-      if (hint) hint.textContent = isTouchDevice() ? 'Solte para enviar' : 'Toque para parar'
+      if (hint) hint.textContent = 'Toque para parar'
     } else {
       voiceFabEl.classList.remove('listening')
       if (micWrap) micWrap.innerHTML = icons.mic
-      if (hint) hint.textContent = isTouchDevice() ? 'Segure para falar' : 'Toque para falar'
+      if (hint) hint.textContent = isTouchDevice() ? 'Toque para falar' : 'Clique para falar'
     }
   }
 
@@ -749,47 +749,54 @@
       '<div class="aal-voice-fab-mic">' +
       icons.mic +
       '</div><div style="display:flex;flex-direction:column;line-height:1.2"><span class="aal-voice-fab-label">Navegar por voz</span><span class="aal-voice-fab-hint">' +
-      (touch ? 'Segure para falar' : 'Toque para falar') +
+      (touch ? 'Toque para falar' : 'Clique para falar') +
       '</span></div>'
     fabContainer.appendChild(fab)
     voiceFabEl = fab
 
-    var holdHandled = false
+    // Unifica o gesto: um toque/clique inicia a escuta; outro encerra.
+    // Antes exigia "segurar" no mobile, o que nao era confiavel.
+    var pressHandled = false
     fab.addEventListener('pointerdown', function (e) {
-      if (!touch) return // no PC, espera o click
       e.preventDefault()
-      fabPointerActive = true
-      holdHandled = false
-      fab.setPointerCapture(e.pointerId)
-      if (!recognizing) startListening()
-      updateVoiceFabState()
+      pressHandled = false
+      try {
+        fab.setPointerCapture(e.pointerId)
+      } catch (err) {}
     })
     fab.addEventListener('pointerup', function (e) {
-      if (!touch || !fabPointerActive) return
-      fabPointerActive = false
+      if (pressHandled) return
+      pressHandled = true
       try {
         fab.releasePointerCapture(e.pointerId)
       } catch (err) {}
-      if (recognizing) stopListening()
-      updateVoiceFabState()
+      toggleListening()
     })
     fab.addEventListener('pointercancel', function () {
-      fabPointerActive = false
-      if (recognizing) stopListening()
-      updateVoiceFabState()
+      pressHandled = false
     })
-    // PC: click alterna listening.
     fab.addEventListener('click', function (e) {
-      if (touch) return // no mobile o pointerdown/up cuida
+      // Evita disparo duplicado (pointerup + click) em alguns navegadores.
       e.preventDefault()
       e.stopPropagation()
-      if (recognizing) {
-        stopListening()
-      } else {
-        startListening()
-      }
-      updateVoiceFabState()
     })
+    updateVoiceFabState()
+  }
+
+  function toggleListening() {
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SR) {
+      voiceStatus = 'Reconhecimento de voz não suportado neste navegador. Use o campo de texto na aba Voz.'
+      if (!isOpen) openPanel()
+      menuStack = ['main', 'voice']
+      renderPanel()
+      return
+    }
+    if (recognizing) {
+      stopListening()
+    } else {
+      startListening()
+    }
     updateVoiceFabState()
   }
 
@@ -848,6 +855,147 @@
     updateVoiceFabState()
   }
 
+  function applyServerCommand(data) {
+    if (data.error) {
+      voiceStatus = 'Erro: ' + data.error
+      voiceMatches = []
+      renderPanel()
+      return
+    }
+    var matches = data.matches || []
+    var suggestions = data.suggestions || []
+
+    // Intencoes que nao dependem de casar entidade do SAM.
+    if (data.action === 'READ') {
+      voiceStatus = 'Lendo a página...'
+      voiceMatches = []
+      renderPanel()
+      speakPage()
+      return
+    }
+    if (data.action === 'HIGHLIGHT') {
+      settings.highlight = true
+      saveSettings()
+      applyHighlight()
+      var hTarget = matches[0]
+      if (hTarget) {
+        var hEl = findElementForMatch(hTarget)
+        if (hEl) {
+          hEl.classList.add('aal-highlighted')
+          try {
+            hEl.scrollIntoView({ block: 'center', behavior: settings.reducedMotion ? 'auto' : 'smooth' })
+          } catch (e) {}
+          if (hEl.focus) hEl.focus({ preventScroll: true })
+        }
+      }
+      voiceStatus = hTarget ? 'Destacando: ' + hTarget.name : 'Elementos interativos destacados.'
+      voiceMatches = []
+      renderPanel()
+      return
+    }
+    if (data.action === 'SETTINGS') {
+      applySettingsVoice(data.intentTarget || '')
+      voiceMatches = []
+      renderPanel()
+      return
+    }
+
+    if (!matches.length) {
+      voiceMatches = []
+      if (suggestions.length) {
+        voiceStatus = 'Não encontrei isso. Você quis dizer:'
+        voiceMatches = suggestions.map(function (s) {
+          return { name: s.name || s, type: 'ROUTE', metadata: { targetRoute: s.path || '' } }
+        })
+      } else {
+        voiceStatus = 'Não encontrei uma ação para esse comando.'
+      }
+      renderPanel()
+      return
+    }
+
+    var best = matches.slice().sort(function (a, b) {
+      return (b.confidence || 0) - (a.confidence || 0)
+    })[0]
+    if (data.steps && data.steps.length) {
+      if (settings.controlMode === 'guided') {
+        showGuidedPlan(data.steps, best)
+      } else {
+        executePlan(data.steps)
+      }
+    } else {
+      executeCommand(best, data.action, data.fillValue)
+    }
+  }
+
+  // Pre-processamento leve + fallback local quando o servidor esta indisponivel.
+  // Nao duplica a NLU completa — apenas os comandos mais simples.
+  function localCommand(transcript) {
+    var t = transcript.toLowerCase().trim()
+    if (/(ler|leia|le a|narrar|narra).*(pagina|tela|pagina)|leia a pagina|ler a pagina/.test(t)) {
+      voiceStatus = 'Lendo a página...'
+      renderPanel()
+      speakPage()
+      return true
+    }
+    if (/contraste/.test(t)) {
+      settings.highContrast = /liga|ativar|aumentar/.test(t) ? true : !settings.highContrast
+      saveSettings()
+      applySettings()
+      voiceStatus = 'Contraste ' + (settings.highContrast ? 'ativado' : 'desativado')
+      renderPanel()
+      return true
+    }
+    if (/(aument|maior|diminu|menor).*fonte|fonte.*(aument|maior|diminu|menor)/.test(t)) {
+      var grow = /aument|maior/.test(t)
+      settings.fontSize = Math.max(50, Math.min(200, (settings.fontSize || 100) + (grow ? 10 : -10)))
+      saveSettings()
+      applySettings()
+      voiceStatus = 'Fonte ajustada para ' + settings.fontSize + '%'
+      renderPanel()
+      return true
+    }
+    // Navegacao local por nome de rota no DOM atual.
+    if (config && config.entities) {
+      var norm = t
+        .replace(/[^0-9a-záàâãéêíóôõúüç\s]/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+      var hit = config.entities.filter(function (e) {
+        return e.type === 'ROUTE'
+      }).find(function (e) {
+        var hay = ((e.name || '') + ' ' + (e.path || '') + ' ' + (e.slug || '')).toLowerCase()
+        return hay.indexOf(norm) > -1 || norm.indexOf((e.name || '').toLowerCase()) > -1
+      })
+      if (hit) {
+        executeCommand(hit, 'NAVIGATE', '')
+        return true
+      }
+    }
+    return false
+  }
+
+  function speakPage() {
+    var main = document.querySelector('main') || document.body
+    var text = (main.innerText || main.textContent || '').replace(/\s+/g, ' ').slice(0, 8000)
+    speakText(text)
+  }
+
+  function applySettingsVoice(target) {
+    target = String(target || '').toLowerCase()
+    if (target.indexOf('contraste') > -1) {
+      settings.highContrast = !settings.highContrast
+      voiceStatus = 'Contraste ' + (settings.highContrast ? 'ativado' : 'desativado')
+    } else if (target.indexOf('font') > -1 || target.indexOf('tamanho') > -1) {
+      settings.fontSize = Math.min(200, (settings.fontSize || 100) + 10)
+      voiceStatus = 'Fonte aumentada para ' + settings.fontSize + '%'
+    } else {
+      voiceStatus = 'Preferência ajustada.'
+    }
+    saveSettings()
+    applySettings()
+  }
+
   function processCommand(transcript) {
     if (/^(continuar|continue|prosseguir|pode continuar)$/i.test(transcript.trim())) {
       var pending = loadPendingPlan()
@@ -862,39 +1010,19 @@
       url: window.location.href,
     })
       .then(function (data) {
-        if (data.error) {
-          voiceStatus = 'Erro: ' + data.error
-          voiceMatches = []
-          renderPanel()
+        if (data && data.error && data.error.indexOf('scan') > -1) {
+          // Sem scan/SAM no servidor — tenta o fallback local.
+          if (!localCommand(transcript)) applyServerCommand(data)
           return
         }
-        var matches = data.matches || []
-        if (matches.length === 0) {
-          voiceStatus = 'Nenhuma ação encontrada'
-          renderPanel()
-        } else {
-          // Navegação direta, sem pedir confirmação.
-          // Sempre age sobre o melhor match (maior confiança).
-          var best = matches.slice().sort(function (a, b) {
-            return (b.confidence || 0) - (a.confidence || 0)
-          })[0]
-          if (data.steps && data.steps.length) {
-            if (settings.controlMode === 'guided') {
-              showGuidedPlan(data.steps, best)
-            } else {
-              executePlan(data.steps)
-            }
-          } else if (data.action === 'NAVIGATE') {
-            // Sem passos mapeados, tenta executar a navegação direto.
-            executeCommand(best, data.action, data.fillValue)
-          } else {
-            executeCommand(best, data.action, data.fillValue)
-          }
-        }
+        applyServerCommand(data)
       })
       .catch(function () {
-        voiceStatus = 'Erro de conexão'
-        renderPanel()
+        // Servidor indisponivel: fallback local para comandos simples.
+        if (!localCommand(transcript)) {
+          voiceStatus = 'Sem conexão com o servidor e não reconheci o comando localmente.'
+          renderPanel()
+        }
       })
   }
 
@@ -1043,15 +1171,23 @@
 
   function collectCurrentPageActions() {
     var selectors = [
-      'button',
+      'button:not([disabled])',
       'a[href]',
       'input:not([type="hidden"])',
       'textarea',
       'select',
       '[role="button"]',
       '[role="link"]',
+      '[role="combobox"]',
+      '[role="listbox"]',
+      '[role="checkbox"]',
+      '[role="switch"]',
+      '[role="tab"]',
       '[aria-label]',
       '[data-skip-anchor]',
+      'details > summary',
+      '[contenteditable="true"]',
+      '[tabindex]:not([tabindex="-1"])',
     ].join(',')
     var nodes = Array.prototype.slice.call(document.querySelectorAll(selectors))
     var seen = new Set()
@@ -1061,19 +1197,27 @@
       if (!isVisibleAction(el) || seen.has(el)) return
       seen.add(el)
       var tag = (el.tagName || '').toLowerCase()
+      var role = el.getAttribute('role') || ''
       var label = elementLabel(el)
       if (!label && tag === 'input') label = el.getAttribute('type') === 'password' ? 'Senha' : 'Campo'
+      if (!label && (role === 'combobox' || tag === 'select')) label = 'Lista de opções'
+      if (!label && tag === 'summary') label = 'Detalhes'
       if (!label) return
       var index = actions.length + 1
       var selector = selectorForElement(el, index)
       if (selector.indexOf('data-aal-live-action') > -1) el.setAttribute('data-aal-live-action', index)
-      var isField = /^(input|textarea|select)$/.test(tag)
+      var isField = /^(input|textarea|select)$/.test(tag) || role === 'combobox' || role === 'listbox'
+      var isDropdown = tag === 'select' || role === 'combobox' || role === 'listbox'
       var href = el.getAttribute('href') || ''
       actions.push({
         id: 'live-' + index,
         type: 'COMPONENT',
         name: label.slice(0, 80),
-        description: isField ? 'Campo visivel nesta tela.' : 'Acao visivel nesta tela.',
+        description: isDropdown
+          ? 'Lista suspensa nesta tela.'
+          : isField
+            ? 'Campo visivel nesta tela.'
+            : 'Acao visivel nesta tela.',
         path: window.location.pathname,
         metadata: {
           cssSelector: selector,
@@ -1081,11 +1225,12 @@
           kind: isField ? 'fill' : href ? 'navigation' : 'click',
           targetRoute: href && href.charAt(0) === '/' ? href : '',
           componentType: tag,
+          isDropdown: isDropdown,
           live: true,
         },
       })
     })
-    return actions.slice(0, 12)
+    return actions.slice(0, 30)
   }
 
   function findByText(label) {
@@ -1275,7 +1420,30 @@
     return icons.nav
   }
 
+  function navigateToRoute(route) {
+    // 1. Tenta clicar num link/ancora do DOM atual que aponte para a rota.
+    if (route && route.path) {
+      var direct = document.querySelector('a[href="' + escapeCss(route.path) + '"]')
+      if (direct) {
+        addHistory('NAVIGATE', route.pageTitle || route.name || route.path)
+        activateElement(direct)
+        voiceStatus = 'Indo para: ' + (route.pageTitle || route.name || route.path)
+        renderPanel()
+        return
+      }
+    }
+    // 2. Caso contrario, pede o caminho ao motor do servidor (suporta multi-hop).
+    processCommand('ir para ' + (route.pageTitle || route.name || (route.path || '').replace(/^\//, '')))
+  }
+
   function renderNav(c) {
+    // Contexto da tela atual no topo.
+    var ctxBox = document.createElement('div')
+    ctxBox.className = 'aal-section'
+    var currentTitle = (document.querySelector('h1') && document.querySelector('h1').innerText) || document.title || 'Tela atual'
+    ctxBox.innerHTML = '<b>Você está em</b><span>' + escapeHtml(currentTitle) + '</span>'
+    c.appendChild(ctxBox)
+
     var grid = document.createElement('div')
     grid.className = 'aal-nav-grid'
     c.appendChild(grid)
@@ -1291,7 +1459,7 @@
         grid.innerHTML = ''
         if (routes.length === 0) {
           grid.style.display = 'block'
-          grid.innerHTML = '<div class="aal-empty">Nenhuma tela disponível.</div>'
+          grid.innerHTML = '<div class="aal-empty">Nenhuma tela mapeada neste projeto. Escaneie o projeto para gerar o mapa semântico.</div>'
           return
         }
         routes.slice(0, 24).forEach(function (r) {
@@ -1305,8 +1473,7 @@
             escapeHtml(label) +
             '</span>'
           card.addEventListener('click', function () {
-            addHistory('NAVIGATE', label)
-            processCommand('ir para ' + label)
+            navigateToRoute(r)
           })
           grid.appendChild(card)
         })
@@ -1797,23 +1964,75 @@
     if (overlayEl) overlayEl.style.pointerEvents = 'auto'
   }
 
+  var guidedStepIndex = 0
+
+  function spotlightCurrentGuidedStep() {
+    var step = guidedPlan[guidedStepIndex]
+    if (!step) {
+      clearGuidedSpotlight()
+      return
+    }
+    var el = findElementForMatch(step.match || {})
+    if (el) {
+      try {
+        el.scrollIntoView({ block: 'center', behavior: settings.reducedMotion ? 'auto' : 'smooth' })
+      } catch (e) {}
+      showGuidedSpotlight(el)
+    } else {
+      clearGuidedSpotlight()
+    }
+  }
+
+  function advanceGuidedStep() {
+    guidedStepIndex++
+    if (guidedStepIndex >= guidedPlan.length) {
+      guidedStatus = 'Você concluiu o caminho. 🎉'
+      guidedPlan = []
+      guidedStepIndex = 0
+      clearGuidedSpotlight()
+      renderPanel()
+      return
+    }
+    guidedStatus =
+      'Passo ' + (guidedStepIndex + 1) + ' de ' + guidedPlan.length + ': ' + (guidedPlan[guidedStepIndex].label || 'continue')
+    renderPanel()
+    spotlightCurrentGuidedStep()
+  }
+
+  function doCurrentGuidedStep() {
+    var step = guidedPlan[guidedStepIndex]
+    if (!step) return
+    if (step.action === 'CLICK' || step.action === 'NAVIGATE') {
+      var el = findElementForMatch(step.match || {})
+      if (el) {
+        activateElement(el)
+        addHistory(step.action, step.label || (step.match && step.match.name) || 'passo')
+        voiceStatus = 'Feito: ' + (step.label || (step.match && step.match.name) || 'passo')
+      } else {
+        voiceStatus = 'Não encontrei o elemento na tela: ' + (step.label || '')
+      }
+    } else if (step.action === 'WAIT_INPUT') {
+      var field = findElementForMatch(step.match || {})
+      if (field && field.focus) field.focus()
+      voiceStatus = 'Preencha o campo destacado e toque em avançar.'
+    }
+    renderPanel()
+    // Avanca apos uma pequena pausa para a SPA/navegacao acontecer.
+    setTimeout(advanceGuidedStep, step.action === 'WAIT_INPUT' ? 200 : 650)
+  }
+
   function showGuidedPlan(steps, target) {
     guidedPlan = (steps || []).filter(function (step) {
       return step.action !== 'DONE'
     })
+    guidedStepIndex = 0
     guidedStatus = target
-      ? 'Caminho para: ' + (target.name || target.path || 'destino')
+      ? 'Caminho para: ' + (target.name || target.path || 'destino') + ' — toque em "Fazer este passo".'
       : 'Siga os passos destacados na tela.'
     voiceStatus = 'Modo guiado: siga os passos abaixo.'
     menuStack = ['main', 'guide']
     renderPanel()
-    var firstClickable = guidedPlan.find(function (step) {
-      return step.action === 'CLICK'
-    })
-    if (firstClickable) {
-      var el = findElementForMatch(firstClickable.match || {})
-      if (el) showGuidedSpotlight(el)
-    }
+    spotlightCurrentGuidedStep()
   }
 
   function requestGuidedPath(input) {
@@ -1869,8 +2088,13 @@
     c.appendChild(build)
 
     guidedPlan.slice(0, 5).forEach(function (step, index) {
+      var isCurrent = index === guidedStepIndex
       var btn = document.createElement('button')
-      btn.className = 'aal-step'
+      btn.className = 'aal-step' + (isCurrent ? ' aal-step-current' : '')
+      if (isCurrent) {
+        btn.style.background = 'rgba(37,99,235,0.12)'
+        btn.style.border = '1px solid rgba(37,99,235,0.4)'
+      }
       var label = step.label || (step.match && step.match.name) || step.reason || 'Passo'
       btn.innerHTML =
         '<span class="aal-step-num">' +
@@ -1879,19 +2103,35 @@
         escapeHtml(label) +
         '</b><small>' +
         (step.action === 'CLICK'
-          ? 'Clique neste item para continuar'
+          ? isCurrent
+            ? 'Toque em "Fazer este passo"'
+            : 'Clique neste item depois'
           : step.action === 'WAIT_INPUT'
             ? 'Preencha este campo'
             : step.action || '') +
         '</small></span>'
       btn.addEventListener('click', function () {
-        if (step.action === 'CLICK') {
-          var el = findElementForMatch(step.match || {})
-          if (el) showGuidedSpotlight(el)
-        }
+        guidedStepIndex = index
+        renderPanel()
+        spotlightCurrentGuidedStep()
       })
       c.appendChild(btn)
     })
+
+    if (guidedPlan.length) {
+      var doStep = document.createElement('button')
+      doStep.className = 'aal-btn'
+      doStep.style.background = 'rgba(37,99,235,0.12)'
+      doStep.innerHTML = '<b>Fazer este passo</b><br><span style="font-size:11px;opacity:.65">Executa o passo atual e avança</span>'
+      doStep.addEventListener('click', doCurrentGuidedStep)
+      c.appendChild(doStep)
+
+      var next = document.createElement('button')
+      next.className = 'aal-btn'
+      next.innerHTML = '<b>Avançar</b>'
+      next.addEventListener('click', advanceGuidedStep)
+      c.appendChild(next)
+    }
 
     var start = document.createElement('button')
     start.className = 'aal-btn'
@@ -2063,12 +2303,26 @@
     }
   }
   function highlightElements() {
-    if (!config || !config.entities) return
-    config.entities.forEach(function (ent) {
-      if (ent.type === 'COMPONENT' && ent.metadata && ent.metadata.cssSelector) {
-        var el = document.querySelector(ent.metadata.cssSelector)
-        if (el) el.classList.add('aal-highlighted')
-      }
+    // Destaca elementos interativos REAIS do DOM (links, botoes, campos,
+    // comboboxes, details/summary), nao apenas entidades do SAM.
+    var selector = [
+      'a[href]',
+      'button:not([disabled])',
+      'input:not([type="hidden"])',
+      'textarea',
+      'select',
+      '[role="button"]',
+      '[role="link"]',
+      '[role="combobox"]',
+      '[role="listbox"]',
+      '[contenteditable="true"]',
+      'details > summary',
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(',')
+    document.querySelectorAll(selector).forEach(function (el) {
+      if (el.closest && el.closest('#aal-widget-host')) return
+      if (el.disabled || el.getAttribute('aria-hidden') === 'true') return
+      el.classList.add('aal-highlighted')
     })
   }
   function applyTTS() {
@@ -2085,9 +2339,27 @@
     if (!text) return
     window.speechSynthesis.cancel()
     var u = new SpeechSynthesisUtterance(text)
-    u.lang = settings.ttsLang === 'en' ? 'en-US' : 'pt-BR'
+    var lang = settings.ttsLang === 'en' ? 'en-US' : 'pt-BR'
+    u.lang = lang
+    // Seleciona explicitamente uma voz do idioma alvo para evitar o fallback
+    // para a voz padrao (geralmente ingles) em navegadores de desktop.
+    try {
+      var voices = window.speechSynthesis.getVoices() || []
+      var match =
+        voices.find(function (v) {
+          return String(v.lang || '').toLowerCase().indexOf(lang.slice(0, 2)) === 0 && /native|local/i.test(v.localService ? 'local' : '')
+        }) ||
+        voices.find(function (v) {
+          return String(v.lang || '').toLowerCase().indexOf(lang.slice(0, 2)) === 0
+        })
+      if (match) u.voice = match
+    } catch (e) {}
     u.rate = settings.ttsSpeed || 1
     window.speechSynthesis.speak(u)
+  }
+  // Algumas navegadoras so populam getVoices() apos o evento voiceschanged.
+  if (window.speechSynthesis && window.speechSynthesis.addEventListener) {
+    window.speechSynthesis.addEventListener('voiceschanged', function () {})
   }
   function elementReadingContext(el) {
     var label =

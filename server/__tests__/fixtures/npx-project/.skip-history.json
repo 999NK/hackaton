@@ -1,0 +1,22 @@
+[
+  {
+    "scannedAt": "2026-07-12T03:20:29.500Z",
+    "score": 100,
+    "violations": 0,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "unknown": 0
+  },
+  {
+    "scannedAt": "2026-07-12T03:21:10.982Z",
+    "score": 100,
+    "violations": 0,
+    "critical": 0,
+    "serious": 0,
+    "moderate": 0,
+    "minor": 0,
+    "unknown": 0
+  }
+]

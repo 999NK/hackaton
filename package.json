@@ -17,7 +17,7 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "preview": "node server/index.js --production",
-    "test": "echo \"there are no tests for this project\" && exit 0",
+    "test": "node --test server/__tests__/scanner-upload.test.js",
     "test:watch": "echo \"there are no tests for this project\" && exit 0"
   },
   "dependencies": {

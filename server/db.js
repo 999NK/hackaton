@@ -44,6 +44,7 @@ export function rowScan(row) {
   if (!row) return null
   return {
     id: row.id,
+    externalScanId: row.external_scan_id ?? '',
     project: row.project_id,
     status: row.status,
     filesCount: row.files_count ?? 0,
@@ -56,6 +57,13 @@ export function rowScan(row) {
     filesUploaded: row.files_uploaded ?? 0,
     report: row.report ?? {},
     entitiesCount: row.entities_count ?? 0,
+    expectedArtifacts: row.expected_artifacts ?? 0,
+    receivedArtifacts: row.received_artifacts ?? 0,
+    validArtifacts: row.valid_artifacts ?? 0,
+    scannerVersion: row.scanner_version ?? '',
+    schemaVersion: row.schema_version ?? '',
+    bundleVersion: row.bundle_version ?? '',
+    completedAt: row.completed_at,
     token: row.token ?? '',
     created: row.created,
     updated: row.updated,

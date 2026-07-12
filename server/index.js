@@ -5,6 +5,12 @@ import dotenv from 'dotenv'
 import express from 'express'
 import jwt from 'jsonwebtoken'
 import { migrate, pool, rowEntity, rowProject, rowRelationship, rowScan } from './db.js'
+import {
+  getScannerToken,
+  normalizeUpload,
+  parseScannerUpload,
+  receiveScannerUpload,
+} from './scanner-upload.js'
 
 dotenv.config({ quiet: true })
 
@@ -12,6 +18,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(__dirname, '..')
 const app = express()
 const isVercel = Boolean(process.env.VERCEL)
+const isEntrypoint = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 const isProduction = process.env.NODE_ENV === 'production' || process.argv.includes('--production')
 const port = Number(process.env.PORT || 8090)
 const jwtSecret = process.env.JWT_SECRET || 'change-me-before-production'
@@ -250,28 +257,26 @@ app.get('/api/relationships', requireAuth, async (req, res) => {
   res.json(result.rows.map(rowRelationship))
 })
 
-app.post(['/api/scanner', '/backend/v1/scanner', '/backend/v1/api/scanner'], async (req, res) => {
-  const header = req.headers.authorization || ''
-  const token = header.startsWith('Bearer ') ? header.slice(7) : ''
+const scannerRoutes = ['/api/scanner', '/backend/v1/scanner', '/backend/v1/api/scanner']
+
+app.options(scannerRoutes, (_req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Skip-Token')
+  res.status(204).end()
+})
+
+app.post(scannerRoutes, async (req, res) => {
+  const parsed = await parseScannerUpload(req)
+  const upload = normalizeUpload(parsed)
+  upload.observed.route = req.originalUrl || req.url
+  const token = getScannerToken(req, parsed.kind === 'multipart' ? { fields: parsed.fields } : parsed.body)
   if (!token) return res.status(401).json({ error: 'Token ausente' })
   const project = await findProjectByToken(token)
   if (!project) return res.status(401).json({ error: 'Token invalido' })
 
-  const body = req.body || {}
-  const report = body.report || body
-  let entitiesCount = 0
-  if (Array.isArray(report?.navigationMap?.screens)) entitiesCount = report.navigationMap.screens.length
-  else if (Array.isArray(report?.routes)) entitiesCount = report.routes.length
-
-  const result = await pool.query(
-    `INSERT INTO scans
-       (project_id, status, report, entities_count, token, error_message, files_count, files_scanned, secrets_found, metadata)
-     VALUES ($1, 'COMPLETED', $2, $3, $4, '', $5, $5, $6, $2)
-     RETURNING *`,
-    [project.id, report, entitiesCount, token, body.filesCount || 0, body.secretsFound || 0],
-  )
-  await pool.query('UPDATE projects SET last_scanned_at = now() WHERE id = $1', [project.id])
-  res.json({ scanId: result.rows[0].id })
+  const response = await receiveScannerUpload({ pool, project, token, upload })
+  res.status(202).json(response)
 })
 
 app.get(
@@ -284,14 +289,24 @@ app.get(
     const header = req.headers.authorization || ''
     const token = header.startsWith('Bearer ') ? header.slice(7) : ''
     if (!token) return res.status(401).json({ error: 'Token ausente' })
-    const result = await pool.query('SELECT * FROM scans WHERE id = $1', [req.params.scanId])
+    const result = await pool.query(
+      `SELECT s.*, p.token AS project_token
+       FROM scans s
+       JOIN projects p ON p.id = s.project_id
+       WHERE s.id = $1 OR s.external_scan_id = $1`,
+      [req.params.scanId],
+    )
     const scan = result.rows[0]
     if (!scan) return res.status(404).json({ error: 'Scan nao encontrado' })
-    if (scan.token !== token) return res.status(401).json({ error: 'Token invalido' })
+    if (scan.project_token !== token && scan.token !== token) return res.status(401).json({ error: 'Token invalido' })
     res.json({
       scanId: scan.id,
+      externalScanId: scan.external_scan_id || '',
       status: scan.status,
       entitiesCount: scan.entities_count || 0,
+      expectedArtifacts: scan.expected_artifacts || 0,
+      receivedArtifacts: scan.received_artifacts || 0,
+      validArtifacts: scan.valid_artifacts || 0,
       errorMessage: scan.error_message || null,
     })
   },
@@ -486,7 +501,7 @@ app.use((err, _req, res, _next) => {
 
 await migrate()
 
-if (!isVercel) {
+if (!isVercel && isEntrypoint) {
   const skipVite = process.env.SKIP_VITE === 'true'
 
   if (isProduction) {

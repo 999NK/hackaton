@@ -1137,9 +1137,10 @@
       transcript: transcript,
       path: window.location.pathname,
       url: window.location.href,
+      actions: collectCurrentPageActions(),
     })
       .then(function (data) {
-        if (data && data.error && data.error.indexOf('scan') > -1) {
+        if (data && data.error) {
           // Sem scan/SAM no servidor — tenta o fallback local.
           if (!localCommand(transcript)) applyServerCommand(data)
           return

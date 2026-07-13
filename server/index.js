@@ -78,17 +78,51 @@ function projectCors(_project, _req, res, methods) {
 
 async function findProjectByToken(token) {
   if (!token) return null
-  const result = await pool.query(
-    `SELECT p.* FROM projects p
+  try {
+    const result = await pool.query(
+      `SELECT p.* FROM projects p
      WHERE p.token = $1
         OR EXISTS (
           SELECT 1 FROM project_token_aliases a
           WHERE a.project_id = p.id AND a.token = $1 AND a.revoked_at IS NULL
         )
      LIMIT 1`,
-    [token],
-  )
-  return result.rows[0] || null
+      [token],
+    )
+    return result.rows[0] || null
+  } catch (error) {
+    const fallbackTokens = String(process.env.WIDGET_FALLBACK_TOKENS || '').split(',').map((value) => value.trim()).filter(Boolean)
+    if (fallbackTokens.includes(token)) return { id: 'widget-fallback', name: 'Skip Widget', token, fallback: true }
+    throw error
+  }
+}
+
+function liveEntitiesFromRequest(body) {
+  return (Array.isArray(body?.actions) ? body.actions : []).slice(0, 100).filter((item) => item?.id && item?.name).map((item) => ({
+    id: String(item.id), type: String(item.type || 'COMPONENT'), name: String(item.name).slice(0, 120),
+    path: String(item.path || ''), metadata: item.metadata && typeof item.metadata === 'object' ? item.metadata : {},
+    semanticLabels: [], description: String(item.description || ''),
+  }))
+}
+
+async function interpretWidgetCommandWithAI({ transcript, path, entities }) {
+  if (!process.env.OPENAI_API_KEY || !entities.length) return null
+  const choices = entities.slice(0, 100).map((entity) => ({ id: entity.id, name: entity.name, type: entity.type, path: entity.path || entity.metadata?.targetRoute || '', kind: entity.metadata?.kind || '' }))
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: process.env.OPENAI_WIDGET_MODEL || 'gpt-4o-mini', temperature: 0, response_format: { type: 'json_object' }, messages: [
+      { role: 'system', content: 'Interprete comandos de acessibilidade em portugues. Escolha somente um id da lista. Nunca invente ids, seletores ou URLs. Responda JSON com action (NAVIGATE, CLICK, FILL, READ, HIGHLIGHT ou SETTINGS), targetId (ou string vazia), confidence de 0 a 1 e reason curta.' },
+      { role: 'user', content: JSON.stringify({ command: transcript, currentPath: path, choices }) },
+    ] }),
+  })
+  if (!response.ok) throw new Error(`OpenAI HTTP ${response.status}`)
+  const payload = await response.json()
+  const parsed = JSON.parse(payload.choices?.[0]?.message?.content || '{}')
+  const match = entities.find((entity) => entity.id === parsed.targetId)
+  const standalone = ['READ', 'HIGHLIGHT', 'SETTINGS'].includes(parsed.action)
+  if (!match && !standalone) return null
+  return { action: parsed.action || 'NAVIGATE', matches: match ? [{ ...match, confidence: Number(parsed.confidence || 0.8) }] : [], steps: match ? [{ action: parsed.action === 'FILL' ? 'WAIT_INPUT' : parsed.action, match, label: match.name, reason: parsed.reason || '' }] : [], suggestions: [], fillValue: '', interpretedBy: 'openai' }
 }
 
 async function latestCompletedScan(projectId) {
@@ -649,8 +683,7 @@ app.post('/backend/v1/testing/generate', requireAuth, async (_req, res) => {
 })
 
 app.options('/backend/v1/widget/:endpoint', async (req, res) => {
-  const project = await findProjectByToken(req.query.token || '')
-  projectCors(project, req, res, ['command', 'tts', 'screen'].includes(req.params.endpoint) ? 'POST' : 'GET')
+  projectCors(null, req, res, ['command', 'tts', 'screen'].includes(req.params.endpoint) ? 'POST' : 'GET')
   res.status(204).end()
 })
 
@@ -734,15 +767,20 @@ app.post('/backend/v1/widget/command', async (req, res) => {
   if (!project) return res.status(401).json({ error: 'Token invalido' })
   const transcript = String(req.body?.transcript || '').trim()
   if (!transcript) return res.status(400).json({ error: 'transcript obrigatorio' })
-  const ctx = await loadScanContext(project.id)
-  if (!ctx) return res.status(404).json({ error: 'Nenhum scan completado encontrado' })
-  const response = interpret({
-    transcript,
-    path: String(req.body?.path || ''),
-    entities: ctx.entities,
-    relationships: ctx.relationships,
-  })
-  res.json(response)
+  const liveEntities = liveEntitiesFromRequest(req.body)
+  let ctx = null
+  if (!project.fallback) {
+    try { ctx = await loadScanContext(project.id) } catch { ctx = null }
+  }
+  const entities = [...(ctx?.entities || []), ...liveEntities]
+  if (!entities.length) return res.status(503).json({ error: 'Mapa temporariamente indisponivel', fallback: true })
+  try {
+    const aiResponse = await interpretWidgetCommandWithAI({ transcript, path: String(req.body?.path || ''), entities })
+    if (aiResponse) return res.json(aiResponse)
+  } catch (error) {
+    console.error('widget AI fallback:', error.message)
+  }
+  res.json(interpret({ transcript, path: String(req.body?.path || ''), entities, relationships: ctx?.relationships || [] }))
 })
 
 // Normaliza um rotulo cru (ex.: "btn-submit", "input#email") em uma frase

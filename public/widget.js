@@ -1208,7 +1208,12 @@
       menuStack = ['main', 'voice']
       voiceStatus = 'Continuando navegacao...'
       renderPanel()
-      executePlan(loadPendingPlan())
+      if (settings.controlMode === 'guided') {
+        showGuidedPlan(loadPendingPlan(), null)
+        savePendingPlan([])
+      } else {
+        executePlan(loadPendingPlan())
+      }
     }, 800)
   }
 
@@ -1345,6 +1350,7 @@
     if (meta.anchorId) selectors.push('#' + escapeCss(meta.anchorId), '[data-skip-anchor="' + escapeCss(meta.anchorId) + '"]')
     if (meta.inputName) selectors.push('[name="' + escapeCss(meta.inputName) + '"]')
     if (meta.targetRoute) selectors.push('a[href="' + escapeCss(meta.targetRoute) + '"]')
+    if (match && match.path) selectors.push('a[href="' + escapeCss(match.path) + '"]')
     for (var i = 0; i < selectors.length; i++) {
       try {
         var found = document.querySelector(selectors[i])

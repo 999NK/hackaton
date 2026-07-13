@@ -653,7 +653,11 @@ app.get('/backend/v1/widget/sitemap', async (req, res) => {
     "SELECT * FROM semantic_entities WHERE scan_id = $1 AND type = 'ROUTE' ORDER BY name LIMIT 1000",
     [scan.id],
   )
-  res.json({ routes: result.rows.map(rowEntity) })
+  const seenPaths = new Set()
+  const routes = result.rows
+    .map(rowEntity)
+    .filter((route) => route.path && !seenPaths.has(route.path) && seenPaths.add(route.path))
+  res.json({ routes })
 })
 
 app.get('/backend/v1/widget/entities', async (req, res) => {

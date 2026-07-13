@@ -269,7 +269,7 @@ export function planPath({ entities, relationships, startPath, target, intent })
 
   // Sem caminho no grafo: se o alvo tem targetRoute/cssSelector, gera um passo unico.
   const meta = targetEntity.metadata || {}
-  if (meta.targetRoute || meta.cssSelector || meta.kind) {
+  if (meta.targetRoute || meta.cssSelector || meta.kind || (targetEntity.type === 'ROUTE' && targetEntity.path)) {
     return { steps: [singleStep(targetEntity, intent)], found: true }
   }
   return { steps: [], found: false }
@@ -295,7 +295,7 @@ function singleStep(entity, intent) {
   if (intent === 'FILL' || meta.kind === 'fill') {
     return { action: 'WAIT_INPUT', match: entity, label: entity.name, reason: 'Preencha o campo destacado.' }
   }
-  if (meta.targetRoute || meta.kind === 'navigation') {
+  if (meta.targetRoute || entity.path || meta.kind === 'navigation') {
     return { action: 'NAVIGATE', match: entity, label: entity.name, reason: 'Navegando para ' + entity.name + '.' }
   }
   return { action: 'CLICK', match: entity, label: entity.name, reason: 'Clique em ' + entity.name + '.' }

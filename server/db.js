@@ -72,20 +72,26 @@ export function rowScan(row) {
 
 export function rowEntity(row) {
   if (!row) return null
+  const metadata = row.metadata ?? {}
+  const inferredPath =
+    row.path ||
+    metadata.route ||
+    metadata.targetRoute ||
+    (row.type === 'ROUTE' && /^\//.test(String(row.name || '')) ? row.name : '')
   return {
     id: row.id,
     scan: row.scan_id,
     type: row.type,
     name: row.name,
     slug: row.slug ?? '',
-    path: row.path ?? '',
+    path: inferredPath,
     pageTitle: row.page_title ?? '',
     semanticLabels: row.semantic_labels ?? [],
     description: row.description ?? '',
     accessibilityHint: row.accessibility_hint ?? '',
     confidence: Number(row.confidence ?? 0),
     evidence: row.evidence ?? [],
-    metadata: row.metadata ?? {},
+    metadata,
     created: row.created,
     updated: row.updated,
   }

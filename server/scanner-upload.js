@@ -467,6 +467,9 @@ async function processSemanticMap(client, scanId, sam) {
   for (const entity of sam.entities || []) {
     const externalId = entity.id || entity.entityId || entity.slug
     const slug = entity.slug || externalId || String(entity.name || entity.path || 'entity').toLowerCase().replace(/\s+/g, '-')
+    const normalizedType = toEntityType(entity.type)
+    const inferredPath =
+      entity.path || entity.route || (normalizedType === 'ROUTE' && /^\//.test(String(entity.name || '')) ? entity.name : '')
     const inserted = await client.query(
       `INSERT INTO semantic_entities
          (scan_id, type, name, slug, path, page_title, semantic_labels, description, accessibility_hint, confidence, evidence, metadata)
@@ -474,10 +477,10 @@ async function processSemanticMap(client, scanId, sam) {
        RETURNING id`,
       [
         scanId,
-        toEntityType(entity.type),
+        normalizedType,
         entity.name || entity.title || slug,
         slug,
-        entity.path || entity.route || '',
+        inferredPath,
         entity.pageTitle || entity.title || '',
         JSON.stringify(entity.semanticLabels || entity.labels || []),
         entity.description || '',

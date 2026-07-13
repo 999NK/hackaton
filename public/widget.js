@@ -33,6 +33,9 @@
   var ttsBusy = false
   var recognizing = false
   var recognition = null
+  var recognitionTimer = null
+  var voiceCommandProcessed = false
+  var microphonePending = false
   var overlayEl = null
   var dragData = { dragging: false, startX: 0, startY: 0, origX: 0, origY: 0, moved: false }
   var hostStyleEls = {}
@@ -129,7 +132,10 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }).then(function (r) {
-      return r.json()
+      return r.json().then(function (data) {
+        if (!r.ok && !data.error) data.error = 'HTTP ' + r.status
+        return data
+      })
     })
   }
 
@@ -721,6 +727,8 @@
       } catch (e) {}
       recognizing = false
     }
+    microphonePending = false
+    clearTimeout(recognitionTimer)
   }
 
   function updateVoiceFabState() {
@@ -754,32 +762,32 @@
     fabContainer.appendChild(fab)
     voiceFabEl = fab
 
-    // Unifica o gesto: um toque/clique inicia a escuta; outro encerra.
-    // Antes exigia "segurar" no mobile, o que nao era confiavel.
-    var pressHandled = false
+    // O click e o gesto mais consistente entre mouse, toque e caneta. O fluxo
+    // anterior dependia de pointerup e anulava o click sintetico em alguns
+    // navegadores, fazendo o botao parecer ativo sem abrir o microfone.
     fab.addEventListener('pointerdown', function (e) {
-      e.preventDefault()
-      pressHandled = false
-      try {
-        fab.setPointerCapture(e.pointerId)
-      } catch (err) {}
+      e.stopPropagation()
+      fab.classList.add('pressed')
     })
     fab.addEventListener('pointerup', function (e) {
-      if (pressHandled) return
-      pressHandled = true
-      try {
-        fab.releasePointerCapture(e.pointerId)
-      } catch (err) {}
-      toggleListening()
+      e.stopPropagation()
+      fab.classList.remove('pressed')
     })
     fab.addEventListener('pointercancel', function () {
-      pressHandled = false
+      fab.classList.remove('pressed')
     })
     fab.addEventListener('click', function (e) {
-      // Evita disparo duplicado (pointerup + click) em alguns navegadores.
       e.preventDefault()
       e.stopPropagation()
+      toggleListening()
     })
+    fab.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault()
+        toggleListening()
+      }
+    })
+    fab.setAttribute('tabindex', '0')
     updateVoiceFabState()
   }
 
@@ -792,7 +800,7 @@
       renderPanel()
       return
     }
-    if (recognizing) {
+    if (recognizing || microphonePending) {
       stopListening()
     } else {
       startListening()
@@ -807,11 +815,48 @@
       renderPanel()
       return
     }
+    voiceStatus = 'Solicitando acesso ao microfone...'
+    voiceTranscript = ''
+    voiceMatches = []
+    renderPanel()
+    updateVoiceFabState()
+    microphonePending = true
+
+    // Solicita a permissao explicitamente. Alem de exibir um erro util, isso
+    // evita o estado eterno de "carregando" quando o browser bloqueia o mic.
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then(function (stream) {
+          stream.getTracks().forEach(function (track) { track.stop() })
+          if (!microphonePending) return
+          microphonePending = false
+          beginSpeechRecognition(SR)
+        })
+        .catch(function (error) {
+          microphonePending = false
+          recognizing = false
+          voiceStatus = error && error.name === 'NotAllowedError'
+            ? 'Permissao do microfone negada. Libere o microfone nas configuracoes do navegador.'
+            : 'Nao consegui acessar o microfone. Verifique se ele esta disponivel.'
+          renderPanel()
+          updateVoiceFabState()
+        })
+      return
+    }
+    microphonePending = false
+    beginSpeechRecognition(SR)
+  }
+
+  function beginSpeechRecognition(SR) {
+    if (recognizing) return
     recognition = new SR()
     recognition.lang = settings.ttsLang === 'en' ? 'en-US' : 'pt-BR'
     recognition.continuous = false
     recognition.interimResults = true
+    recognition.maxAlternatives = 3
     recognizing = true
+    voiceCommandProcessed = false
     voiceStatus = 'Ouvindo...'
     voiceTranscript = ''
     voiceMatches = []
@@ -820,35 +865,72 @@
 
     recognition.onresult = function (event) {
       var txt = ''
+      var hasFinal = false
       for (var i = 0; i < event.results.length; i++) {
         txt += event.results[i][0].transcript
+        if (event.results[i].isFinal) hasFinal = true
       }
       voiceTranscript = txt
       var td = container.querySelector('.aal-transcript')
       if (td) td.textContent = txt
+      if (hasFinal && txt.trim()) {
+        dispatchRecognizedCommand(txt.trim())
+        try { recognition.stop() } catch (e) {}
+      }
     }
-    recognition.onerror = function () {
+    recognition.onerror = function (event) {
+      clearTimeout(recognitionTimer)
       recognizing = false
-      voiceStatus = 'Erro no reconhecimento'
+      var reason = event && event.error
+      voiceStatus = reason === 'not-allowed' || reason === 'service-not-allowed'
+        ? 'Permissao do microfone bloqueada pelo navegador.'
+        : reason === 'no-speech'
+          ? 'Nao ouvi nenhuma fala. Toque e tente novamente.'
+          : 'Erro no reconhecimento de voz. Tente novamente.'
       renderPanel()
       updateVoiceFabState()
     }
     recognition.onend = function () {
+      clearTimeout(recognitionTimer)
       recognizing = false
-      if (voiceTranscript.trim()) {
-        voiceStatus = 'Processando...'
-        renderPanel()
-        updateVoiceFabState()
-        processCommand(voiceTranscript.trim())
+      if (voiceTranscript.trim() && !voiceCommandProcessed) {
+        dispatchRecognizedCommand(voiceTranscript.trim())
       } else {
-        voiceStatus = 'Nada foi dito'
+        if (!voiceCommandProcessed) voiceStatus = 'Nada foi dito. Toque para tentar novamente.'
         renderPanel()
         updateVoiceFabState()
       }
     }
-    recognition.start()
+    try {
+      recognition.start()
+      recognitionTimer = setTimeout(function () {
+        if (!recognizing) return
+        if (voiceTranscript.trim()) dispatchRecognizedCommand(voiceTranscript.trim())
+        else voiceStatus = 'Tempo esgotado. Toque e fale novamente.'
+        try { recognition.stop() } catch (e) {}
+        renderPanel()
+        updateVoiceFabState()
+      }, 12000)
+    } catch (error) {
+      recognizing = false
+      voiceStatus = 'Nao foi possivel iniciar o microfone. Aguarde um instante e tente novamente.'
+      renderPanel()
+      updateVoiceFabState()
+    }
+  }
+
+  function dispatchRecognizedCommand(transcript) {
+    if (voiceCommandProcessed) return
+    voiceCommandProcessed = true
+    clearTimeout(recognitionTimer)
+    voiceStatus = 'Entendi: "' + transcript + '". Executando...'
+    renderPanel()
+    updateVoiceFabState()
+    processCommand(transcript)
   }
   function stopListening() {
+    clearTimeout(recognitionTimer)
+    microphonePending = false
     if (recognition) recognition.stop()
     recognizing = false
     renderPanel()
@@ -1108,6 +1190,11 @@
       renderPanel()
       return
     }
+    if (step.action === 'NAVIGATE') {
+      savePendingPlan(steps)
+      executeCommand(match, 'NAVIGATE', '')
+      return
+    }
     executePlan(steps)
   }
 
@@ -1271,12 +1358,21 @@
       target.scrollIntoView({ block: 'center', inline: 'center', behavior: settings.reducedMotion ? 'auto' : 'smooth' })
     } catch (e) {}
     if (target.focus) target.focus({ preventScroll: true })
-    ;['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function (type) {
+    ;['pointerdown', 'mousedown', 'pointerup', 'mouseup'].forEach(function (type) {
       try {
         target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }))
       } catch (e) {}
     })
+    var anchor = target.closest ? target.closest('a[href]') : null
+    var before = window.location.href
     if (target.click) target.click()
+    // React Router normalmente trata o click. Se nenhum handler navegou,
+    // usa o href real como garantia para links internos e externos.
+    if (anchor && anchor.href && anchor.target !== '_blank') {
+      setTimeout(function () {
+        if (window.location.href === before) window.location.assign(anchor.href)
+      }, 250)
+    }
     return true
   }
 
@@ -1292,7 +1388,18 @@
         addHistory('NAVIGATE', match.name)
         voiceStatus = 'Executando caminho: ' + match.name
       } else {
-        voiceStatus = 'Nao encontrei um link ou botao clicavel para ' + match.name
+        var destination = targetRoute || match.path
+        if (destination) {
+          try {
+            var resolved = new URL(destination, window.location.href)
+            addHistory('NAVIGATE', match.name || resolved.pathname)
+            voiceStatus = 'Navegando para: ' + (match.name || resolved.pathname)
+            renderPanel()
+            window.location.assign(resolved.href)
+            return
+          } catch (e) {}
+        }
+        voiceStatus = 'Nao encontrei um destino valido para ' + match.name
       }
       voiceMatches = []
       renderPanel()
@@ -1309,8 +1416,7 @@
       if (el) {
         if (!el && targetRoute) {
           voiceStatus = 'Nao encontrei o link ou botao para ' + match.name
-          return
-          voiceStatus = 'âœ“ Navegando para ' + match.name
+      return
         }
         if (el) {
           activateElement(el)
@@ -1432,8 +1538,19 @@
         return
       }
     }
-    // 2. Caso contrario, pede o caminho ao motor do servidor (suporta multi-hop).
-    processCommand('ir para ' + (route.pageTitle || route.name || (route.path || '').replace(/^\//, '')))
+    // 2. A rota veio do mapa semantico e ja e um destino confiavel. Navega
+    // diretamente; nao precisa pedir ao servidor para interpretar de novo.
+    if (route && route.path) {
+      try {
+        var resolved = new URL(route.path, window.location.href)
+        addHistory('NAVIGATE', route.pageTitle || route.name || route.path)
+        voiceStatus = 'Indo para: ' + (route.pageTitle || route.name || route.path)
+        renderPanel()
+        window.location.assign(resolved.href)
+        return
+      } catch (e) {}
+    }
+    processCommand('ir para ' + (route.pageTitle || route.name || 'tela'))
   }
 
   function renderNav(c) {

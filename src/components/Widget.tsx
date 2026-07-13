@@ -117,7 +117,7 @@ export function AssistiveWidget() {
     }
   }
 
-  const activate = (item: Item) => { item.element.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'center' }); item.element.focus(); window.setTimeout(() => item.element.click(), 180); record(`Ação executada: ${item.label}`) }
+  const activate = (item: Item) => { item.element.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'center' }); item.element.focus(); window.setTimeout(() => activateElement(item.element), 180); record(`Ação executada: ${item.label}`) }
   const reset = () => { setFontScale(100); setContrast(false); setHighlight(false); setReducedMotion(false); window.speechSynthesis.cancel(); setReading(false); record('Preferências restauradas') }
 
   const onPointerDown = (event: React.PointerEvent) => { drag.current = { dx: event.clientX - position.x, dy: event.clientY - position.y, moved: false }; event.currentTarget.setPointerCapture(event.pointerId) }
@@ -153,7 +153,7 @@ export function AssistiveWidget() {
 }
 
 function collectInteractive(): Item[] {
-  return Array.from(document.querySelectorAll<HTMLElement>('main a[href], main button:not([disabled]), main input, main select, main textarea, main [role="button"], main [role="link"], main [role="combobox"], main summary')).filter((el) => !el.closest('[role="dialog"]') && el.offsetParent !== null).map((element, index) => ({ element, label: (element.getAttribute('aria-label') || element.textContent || element.getAttribute('placeholder') || element.getAttribute('name') || `Elemento ${index + 1}`).trim().replace(/\s+/g, ' ').slice(0, 70) }))
+  return Array.from(document.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([type="hidden"]), select, textarea, [role="button"], [role="link"], [role="combobox"], summary')).filter((el) => !el.closest('[role="dialog"]') && el.offsetParent !== null).map((element, index) => ({ element, label: (element.getAttribute('aria-label') || element.textContent || element.getAttribute('placeholder') || element.getAttribute('name') || `Elemento ${index + 1}`).trim().replace(/\s+/g, ' ').slice(0, 70) }))
 }
 
 // Localiza um elemento do DOM a partir de uma entidade retornada pelo motor NLU
@@ -184,10 +184,15 @@ function findElementForMatch(match: any): HTMLElement | null {
 function activateElement(el: HTMLElement) {
   try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }) } catch { /* noop */ }
   el.focus({ preventScroll: true })
-  ;['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach((type) => {
+  ;['pointerdown', 'mousedown', 'pointerup', 'mouseup'].forEach((type) => {
     try { el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window })) } catch { /* noop */ }
   })
+  const anchor = el.closest('a[href]') as HTMLAnchorElement | null
+  const before = window.location.href
   el.click()
+  if (anchor?.href && anchor.target !== '_blank') {
+    window.setTimeout(() => { if (window.location.href === before) window.location.assign(anchor.href) }, 250)
+  }
 }
 
 function WidgetView(props: any) {

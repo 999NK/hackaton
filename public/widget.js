@@ -30,6 +30,8 @@
   var guidedTarget = null
   var guidedStatus = ''
   var guidedPlan = []
+  var guidedObservedElement = null
+  var guidedObservedHandler = null
   var ttsBusy = false
   var recognizing = false
   var recognition = null
@@ -1239,7 +1241,8 @@
     var style = window.getComputedStyle(el)
     if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return false
     var rect = el.getBoundingClientRect()
-    return rect.width > 8 && rect.height > 8 && rect.bottom >= 0 && rect.right >= 0 && rect.top <= window.innerHeight && rect.left <= window.innerWidth
+    // Inclui tambem controles renderizados abaixo da dobra da pagina.
+    return rect.width > 8 && rect.height > 8
   }
 
   function selectorForElement(el, index) {
@@ -1317,7 +1320,7 @@
         },
       })
     })
-    return actions.slice(0, 30)
+    return actions.slice(0, 100)
   }
 
   function findByText(label) {
@@ -1472,7 +1475,12 @@
           '</span>'
         btn.addEventListener('click', function () {
           var targetRoute = ent.metadata ? ent.metadata.targetRoute : ''
-          executeCommand(ent, isField ? 'FILL' : targetRoute ? 'NAVIGATE' : 'CLICK')
+          var action = isField ? 'WAIT_INPUT' : targetRoute ? 'NAVIGATE' : 'CLICK'
+          if (settings.controlMode === 'guided') {
+            showGuidedPlan([{ action: action, match: ent, label: ent.name }], ent)
+          } else {
+            executeCommand(ent, isField ? 'FILL' : targetRoute ? 'NAVIGATE' : 'CLICK')
+          }
         })
         c.appendChild(btn)
       })
@@ -1503,7 +1511,9 @@
               : '')
           btn.addEventListener('click', function () {
             var targetRoute = ent.metadata ? ent.metadata.targetRoute : ''
-            executeCommand(ent, targetRoute ? 'NAVIGATE' : 'CLICK')
+            var action = targetRoute ? 'NAVIGATE' : 'CLICK'
+            if (settings.controlMode === 'guided') showGuidedPlan([{ action: action, match: ent, label: ent.name }], ent)
+            else executeCommand(ent, action)
           })
           c.appendChild(btn)
         })
@@ -1527,6 +1537,10 @@
   }
 
   function navigateToRoute(route) {
+    if (settings.controlMode === 'guided') {
+      requestGuidedPath('ir para ' + (route.pageTitle || route.name || (route.path || '').replace(/^\//, '')))
+      return
+    }
     // 1. Tenta clicar num link/ancora do DOM atual que aponte para a rota.
     if (route && route.path) {
       var direct = document.querySelector('a[href="' + escapeCss(route.path) + '"]')
@@ -2005,8 +2019,14 @@
   }
 
   function clearGuidedSpotlight() {
+    if (guidedObservedElement && guidedObservedHandler) {
+      guidedObservedElement.removeEventListener('click', guidedObservedHandler, true)
+    }
+    guidedObservedElement = null
+    guidedObservedHandler = null
     var old = container.querySelector('.aal-guide-layer')
     if (old) old.remove()
+    if (overlayEl) overlayEl.style.pointerEvents = 'auto'
   }
 
   function showGuidedSpotlight(el) {
@@ -2016,6 +2036,7 @@
     var rect = el.getBoundingClientRect()
     var pad = 8
     var info = explainElement(el)
+    if (overlayEl) overlayEl.style.pointerEvents = 'none'
     var layer = document.createElement('div')
     layer.className = 'aal-guide-layer'
 
@@ -2043,10 +2064,25 @@
       info.description.replace(/[&<>"']/g, function (ch) {
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]
       }) +
-      '</span><button type="button">Entendi</button>'
-    card.querySelector('button').addEventListener('click', clearGuidedSpotlight)
+      '</span><button type="button">Clique no item destacado</button>'
+    card.querySelector('button').addEventListener('click', function () {
+      try { el.scrollIntoView({ block: 'center', behavior: settings.reducedMotion ? 'auto' : 'smooth' }) } catch (e) {}
+      if (el.focus) el.focus({ preventScroll: true })
+    })
     layer.appendChild(card)
     container.appendChild(layer)
+
+    guidedObservedElement = el
+    guidedObservedHandler = function () {
+      var current = guidedPlan[guidedStepIndex]
+      if (!current) return
+      savePendingPlan(guidedPlan.slice(guidedStepIndex + 1))
+      addHistory(current.action || 'CLICK', current.label || info.title)
+      setTimeout(function () {
+        if (guidedPlan.length) advanceGuidedStep()
+      }, 500)
+    }
+    el.addEventListener('click', guidedObservedHandler, true)
   }
 
   function guidedClickCapture(e) {
@@ -2240,7 +2276,7 @@
       doStep.className = 'aal-btn'
       doStep.style.background = 'rgba(37,99,235,0.12)'
       doStep.innerHTML = '<b>Fazer este passo</b><br><span style="font-size:11px;opacity:.65">Executa o passo atual e avança</span>'
-      doStep.addEventListener('click', doCurrentGuidedStep)
+      doStep.addEventListener('click', spotlightCurrentGuidedStep)
       c.appendChild(doStep)
 
       var next = document.createElement('button')

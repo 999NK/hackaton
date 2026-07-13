@@ -32,6 +32,34 @@ CREATE TABLE IF NOT EXISTS project_token_aliases (
   revoked_at timestamptz
 );
 
+CREATE TABLE IF NOT EXISTS scanner_chunk_uploads (
+  upload_id text PRIMARY KEY,
+  project_id text NOT NULL,
+  scan_id text NOT NULL,
+  schema_version text DEFAULT '',
+  bundle_version text DEFAULT '',
+  manifest jsonb NOT NULL DEFAULT '{}'::jsonb,
+  artifacts jsonb NOT NULL DEFAULT '[]'::jsonb,
+  status text NOT NULL DEFAULT 'receiving',
+  created timestamptz NOT NULL DEFAULT now(),
+  updated timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS scanner_upload_chunks (
+  upload_id text NOT NULL,
+  artifact_id text NOT NULL,
+  filename text NOT NULL,
+  chunk_index integer NOT NULL,
+  total_chunks integer NOT NULL,
+  byte_offset bigint NOT NULL,
+  chunk_sha256 text NOT NULL,
+  artifact_sha256 text NOT NULL,
+  artifact_size_bytes bigint NOT NULL,
+  content bytea NOT NULL,
+  created timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (upload_id, artifact_id, chunk_index)
+);
+
 CREATE TABLE IF NOT EXISTS scans (
   id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
   project_id text,
@@ -259,6 +287,7 @@ ALTER TABLE wcag_findings ADD COLUMN IF NOT EXISTS updated timestamptz DEFAULT n
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_token ON projects(token);
 CREATE INDEX IF NOT EXISTS idx_project_token_aliases_project ON project_token_aliases(project_id);
+CREATE INDEX IF NOT EXISTS idx_scanner_chunks_upload ON scanner_upload_chunks(upload_id, artifact_id, chunk_index);
 CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
 CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(owner_id);
 CREATE INDEX IF NOT EXISTS idx_scans_project ON scans(project_id);

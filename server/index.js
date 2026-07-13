@@ -25,6 +25,7 @@ const port = Number(process.env.PORT || 8090)
 const jwtSecret = process.env.JWT_SECRET || 'change-me-before-production'
 const validEntityTypes = ['ROUTE', 'COMPONENT', 'API', 'FLOW', 'BUSINESS_RULE']
 const validRelTypes = ['CONTAINS', 'CONSUMES', 'TRIGGERS', 'REDIRECTS', 'VALIDATES']
+const MAX_SCANNER_CHUNK_BYTES = Math.floor(4.5 * 1024 * 1024)
 
 app.use(express.json({ limit: '10mb' }))
 
@@ -534,6 +535,152 @@ app.get(
 )
 
 const scannerRoutes = ['/api/scanner', '/backend/v1/scanner', '/backend/v1/api/scanner']
+const scannerChunkInitRoutes = scannerRoutes.map((route) => `${route}/chunks/init`)
+const scannerChunkRoutes = scannerRoutes.map((route) => `${route}/chunks/:uploadId`)
+const scannerChunkCompleteRoutes = scannerRoutes.map((route) => `${route}/chunks/:uploadId/complete`)
+
+function scannerCors(res) {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Skip-Token')
+}
+
+async function scannerProject(req, body = {}) {
+  const token = getScannerToken(req, body)
+  if (!token) return { token: '', project: null }
+  return { token, project: await findProjectByToken(token) }
+}
+
+app.options([...scannerChunkInitRoutes, ...scannerChunkRoutes, ...scannerChunkCompleteRoutes], (_req, res) => {
+  scannerCors(res)
+  res.status(204).end()
+})
+
+app.post(scannerChunkInitRoutes, async (req, res) => {
+  scannerCors(res)
+  const { token, project } = await scannerProject(req, req.body)
+  if (!token) return res.status(401).json({ error: 'Token ausente' })
+  if (!project) return res.status(401).json({ error: 'Token invalido' })
+  const scanId = String(req.body?.scanId || '').trim()
+  const artifacts = Array.isArray(req.body?.artifacts) ? req.body.artifacts : []
+  if (!scanId || !artifacts.length) return res.status(400).json({ error: 'scanId e artifacts sao obrigatorios' })
+  const uploadId = `upl_${crypto.randomUUID()}`
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    await client.query(
+      `INSERT INTO scanner_chunk_uploads
+         (upload_id, project_id, scan_id, schema_version, bundle_version, manifest, artifacts)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [uploadId, project.id, scanId, req.body?.schemaVersion || '', req.body?.bundleVersion || '', req.body?.manifest || {}, JSON.stringify(artifacts)],
+    )
+    await client.query('COMMIT')
+    res.status(201).json({ uploadId, scanId, accepted: true, maxChunkBytes: MAX_SCANNER_CHUNK_BYTES })
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
+})
+
+app.post(scannerChunkRoutes, async (req, res, next) => {
+  if (req.path.endsWith('/complete')) return next()
+  scannerCors(res)
+  const parsed = await parseScannerUpload(req)
+  if (parsed.kind !== 'multipart') return res.status(400).json({ error: 'Chunk deve usar multipart/form-data' })
+  const { token, project } = await scannerProject(req, { fields: parsed.fields })
+  if (!token) return res.status(401).json({ error: 'Token ausente' })
+  if (!project) return res.status(401).json({ error: 'Token invalido' })
+  const fields = parsed.fields || {}
+  const file = parsed.files?.find((item) => item.fieldname === 'chunk') || parsed.files?.[0]
+  if (!file) return res.status(400).json({ error: 'Arquivo chunk ausente' })
+  if (file.buffer.length > MAX_SCANNER_CHUNK_BYTES) return res.status(413).json({ error: 'Chunk excede 4.5 MB' })
+  const chunkIndex = Number(fields.chunkIndex)
+  const totalChunks = Number(fields.totalChunks)
+  const offset = Number(fields.offset)
+  const artifactSizeBytes = Number(fields.artifactSizeBytes)
+  const computedChunkHash = crypto.createHash('sha256').update(file.buffer).digest('hex')
+  if (!Number.isInteger(chunkIndex) || chunkIndex < 0 || !Number.isInteger(totalChunks) || totalChunks < 1 || offset < 0) {
+    return res.status(400).json({ error: 'Metadados do chunk invalidos' })
+  }
+  if (computedChunkHash !== fields.chunkSha256) return res.status(422).json({ error: 'chunkSha256 divergente' })
+  const session = await pool.query('SELECT * FROM scanner_chunk_uploads WHERE upload_id = $1 AND project_id = $2', [req.params.uploadId, project.id])
+  if (!session.rowCount) return res.status(404).json({ error: 'Upload nao encontrado' })
+  if (session.rows[0].scan_id !== fields.scanId) return res.status(409).json({ error: 'scanId divergente' })
+  await pool.query(
+    `INSERT INTO scanner_upload_chunks
+       (upload_id, artifact_id, filename, chunk_index, total_chunks, byte_offset, chunk_sha256, artifact_sha256, artifact_size_bytes, content)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+     ON CONFLICT (upload_id, artifact_id, chunk_index)
+     DO UPDATE SET filename=EXCLUDED.filename,total_chunks=EXCLUDED.total_chunks,byte_offset=EXCLUDED.byte_offset,
+                   chunk_sha256=EXCLUDED.chunk_sha256,artifact_sha256=EXCLUDED.artifact_sha256,
+                   artifact_size_bytes=EXCLUDED.artifact_size_bytes,content=EXCLUDED.content`,
+    [req.params.uploadId, fields.artifactId, fields.filename, chunkIndex, totalChunks, offset, computedChunkHash, fields.artifactSha256, artifactSizeBytes, file.buffer],
+  )
+  res.json({ accepted: true, uploadId: req.params.uploadId, artifactId: fields.artifactId, chunkIndex, receivedBytes: file.buffer.length })
+})
+
+app.post(scannerChunkCompleteRoutes, async (req, res) => {
+  scannerCors(res)
+  const { token, project } = await scannerProject(req, req.body)
+  if (!token) return res.status(401).json({ error: 'Token ausente' })
+  if (!project) return res.status(401).json({ error: 'Token invalido' })
+  const sessionResult = await pool.query('SELECT * FROM scanner_chunk_uploads WHERE upload_id = $1 AND project_id = $2', [req.params.uploadId, project.id])
+  if (!sessionResult.rowCount) return res.status(404).json({ error: 'Upload nao encontrado' })
+  const session = sessionResult.rows[0]
+  if (session.scan_id !== req.body?.scanId) return res.status(409).json({ error: 'scanId divergente' })
+  const declaredArtifacts = Array.isArray(req.body?.artifacts) ? req.body.artifacts : session.artifacts
+  const artifacts = []
+  const hashMismatches = []
+  for (const declared of declaredArtifacts) {
+    const chunksResult = await pool.query(
+      'SELECT * FROM scanner_upload_chunks WHERE upload_id=$1 AND artifact_id=$2 ORDER BY chunk_index',
+      [req.params.uploadId, declared.artifactId],
+    )
+    const chunks = chunksResult.rows
+    const expectedTotal = chunks[0]?.total_chunks ?? 0
+    if (!chunks.length || chunks.length !== expectedTotal || chunks.some((chunk, index) => chunk.chunk_index !== index)) {
+      return res.status(409).json({ error: `Chunks incompletos para ${declared.filename}` })
+    }
+    let expectedOffset = 0
+    for (const chunk of chunks) {
+      if (Number(chunk.byte_offset) !== expectedOffset) return res.status(409).json({ error: `Offset invalido para ${declared.filename}` })
+      expectedOffset += chunk.content.length
+    }
+    const buffer = Buffer.concat(chunks.map((chunk) => chunk.content))
+    const artifactHash = crypto.createHash('sha256').update(buffer).digest('hex')
+    const expectedHash = declared.sha256 || chunks[0].artifact_sha256
+    const expectedSize = Number(declared.sizeBytes ?? chunks[0].artifact_size_bytes)
+    if (buffer.length !== expectedSize || artifactHash !== expectedHash) {
+      hashMismatches.push(declared.filename)
+      continue
+    }
+    const rawText = buffer.toString('utf8')
+    let content
+    try { content = JSON.parse(rawText) } catch { content = rawText }
+    artifacts.push({
+      artifactId: declared.artifactId,
+      artifactType: declared.artifactType,
+      filename: declared.filename,
+      contentType: declared.contentType || 'application/json',
+      content,
+      rawText,
+      sizeBytes: buffer.length,
+      sha256: artifactHash,
+      schemaVersion: declared.schemaVersion || session.schema_version,
+      required: declared.required,
+    })
+  }
+  if (hashMismatches.length) return res.status(422).json({ error: 'Hash/tamanho divergente', hashMismatches })
+  if (artifacts.length !== declaredArtifacts.length) return res.status(409).json({ error: 'Upload incompleto' })
+  const response = await receiveScannerUpload({
+    pool, project, token,
+    upload: { scanId: session.scan_id, schemaVersion: session.schema_version, bundleVersion: session.bundle_version, manifest: req.body?.manifest || session.manifest, artifacts, observed: { method: 'POST', contentType: 'chunked', route: req.originalUrl, uploadId: req.params.uploadId } },
+  })
+  await pool.query("UPDATE scanner_chunk_uploads SET status='complete',updated=now() WHERE upload_id=$1", [req.params.uploadId])
+  res.status(202).json(response)
+})
 
 app.options(scannerRoutes, (_req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*')

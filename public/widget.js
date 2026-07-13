@@ -1592,6 +1592,11 @@
 
     apiGet('/backend/v1/widget/sitemap')
       .then(function (data) {
+        if (data.error) {
+          grid.style.display = 'block'
+          grid.innerHTML = '<div class="aal-empty">Nao foi possivel autenticar o widget. Atualize o snippet ou o token do projeto.</div>'
+          return
+        }
         var routes = data.routes || []
         grid.innerHTML = ''
         if (routes.length === 0) {

@@ -77,7 +77,17 @@ function projectCors(_project, _req, res, methods) {
 }
 
 async function findProjectByToken(token) {
-  const result = await pool.query('SELECT * FROM projects WHERE token = $1', [token])
+  if (!token) return null
+  const result = await pool.query(
+    `SELECT p.* FROM projects p
+     WHERE p.token = $1
+        OR EXISTS (
+          SELECT 1 FROM project_token_aliases a
+          WHERE a.project_id = p.id AND a.token = $1 AND a.revoked_at IS NULL
+        )
+     LIMIT 1`,
+    [token],
+  )
   return result.rows[0] || null
 }
 
@@ -234,8 +244,19 @@ app.patch('/api/projects/:id', requireAuth, async (req, res) => {
   const project = await ensureProjectAccess(req.params.id, req.user.id)
   if (!project) return res.status(404).json({ error: 'project not found' })
   const body = req.body || {}
-  const result = await pool.query(
-    `UPDATE projects
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    if (body.token && body.token !== project.token) {
+      await client.query(
+        `INSERT INTO project_token_aliases (token, project_id)
+         VALUES ($1, $2)
+         ON CONFLICT (token) DO UPDATE SET project_id = EXCLUDED.project_id, revoked_at = NULL`,
+        [project.token, project.id],
+      )
+    }
+    const result = await client.query(
+      `UPDATE projects
      SET name = COALESCE($1, name),
          token = COALESCE($2, token),
          base_url = COALESCE($3, base_url),
@@ -243,9 +264,16 @@ app.patch('/api/projects/:id', requireAuth, async (req, res) => {
          language = COALESCE($5, language)
      WHERE id = $6
      RETURNING *`,
-    [body.name, body.token, body.baseUrl, body.framework, body.language, req.params.id],
-  )
-  res.json(rowProject(result.rows[0]))
+      [body.name, body.token, body.baseUrl, body.framework, body.language, req.params.id],
+    )
+    await client.query('COMMIT')
+    res.json(rowProject(result.rows[0]))
+  } catch (error) {
+    await client.query('ROLLBACK')
+    res.status(500).json({ error: error.message || 'project update failed' })
+  } finally {
+    client.release()
+  }
 })
 
 app.delete('/api/projects/:id', requireAuth, async (req, res) => {

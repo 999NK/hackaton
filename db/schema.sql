@@ -25,6 +25,13 @@ CREATE TABLE IF NOT EXISTS projects (
   updated timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS project_token_aliases (
+  token text PRIMARY KEY,
+  project_id text NOT NULL,
+  created timestamptz NOT NULL DEFAULT now(),
+  revoked_at timestamptz
+);
+
 CREATE TABLE IF NOT EXISTS scans (
   id text PRIMARY KEY DEFAULT gen_random_uuid()::text,
   project_id text,
@@ -251,6 +258,7 @@ ALTER TABLE wcag_findings ADD COLUMN IF NOT EXISTS created timestamptz DEFAULT n
 ALTER TABLE wcag_findings ADD COLUMN IF NOT EXISTS updated timestamptz DEFAULT now();
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_token ON projects(token);
+CREATE INDEX IF NOT EXISTS idx_project_token_aliases_project ON project_token_aliases(project_id);
 CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
 CREATE INDEX IF NOT EXISTS idx_projects_owner ON projects(owner_id);
 CREATE INDEX IF NOT EXISTS idx_scans_project ON scans(project_id);

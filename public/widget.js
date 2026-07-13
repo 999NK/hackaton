@@ -38,6 +38,11 @@
   var recognitionTimer = null
   var voiceCommandProcessed = false
   var microphonePending = false
+  var microphonePermissionStream = null
+  var recognitionStartedAt = 0
+  var recognitionRetryCount = 0
+  var voiceStopRequested = false
+  var recognitionErrorReason = ''
   var overlayEl = null
   var dragData = { dragging: false, startX: 0, startY: 0, origX: 0, origY: 0, moved: false }
   var hostStyleEls = {}
@@ -820,6 +825,8 @@
     voiceStatus = 'Solicitando acesso ao microfone...'
     voiceTranscript = ''
     voiceMatches = []
+    voiceStopRequested = false
+    recognitionRetryCount = 0
     renderPanel()
     updateVoiceFabState()
     microphonePending = true
@@ -830,8 +837,14 @@
       navigator.mediaDevices
         .getUserMedia({ audio: true })
         .then(function (stream) {
-          stream.getTracks().forEach(function (track) { track.stop() })
-          if (!microphonePending) return
+          if (!microphonePending) {
+            stream.getTracks().forEach(function (track) { track.stop() })
+            return
+          }
+          // Mantem o dispositivo aberto ate o SpeechRecognition confirmar
+          // onstart. No Chrome/Edge do Windows, liberar o stream antes disso
+          // pode encerrar imediatamente a sessao como se nada fosse dito.
+          microphonePermissionStream = stream
           microphonePending = false
           beginSpeechRecognition(SR)
         })
@@ -851,7 +864,7 @@
   }
 
   function beginSpeechRecognition(SR) {
-    if (recognizing) return
+    if (recognizing || voiceStopRequested) return
     recognition = new SR()
     recognition.lang = settings.ttsLang === 'en' ? 'en-US' : 'pt-BR'
     recognition.continuous = false
@@ -859,11 +872,25 @@
     recognition.maxAlternatives = 3
     recognizing = true
     voiceCommandProcessed = false
+    recognitionErrorReason = ''
+    recognitionStartedAt = Date.now()
     voiceStatus = 'Ouvindo...'
     voiceTranscript = ''
     voiceMatches = []
     renderPanel()
     updateVoiceFabState()
+
+    recognition.onstart = function () {
+      recognitionStartedAt = Date.now()
+      if (microphonePermissionStream) {
+        setTimeout(function () {
+          if (microphonePermissionStream) {
+            microphonePermissionStream.getTracks().forEach(function (track) { track.stop() })
+            microphonePermissionStream = null
+          }
+        }, 500)
+      }
+    }
 
     recognition.onresult = function (event) {
       var txt = ''
@@ -882,8 +909,10 @@
     }
     recognition.onerror = function (event) {
       clearTimeout(recognitionTimer)
-      recognizing = false
       var reason = event && event.error
+      recognitionErrorReason = reason || 'unknown'
+      if (reason === 'no-speech') return
+      recognizing = false
       voiceStatus = reason === 'not-allowed' || reason === 'service-not-allowed'
         ? 'Permissao do microfone bloqueada pelo navegador.'
         : reason === 'no-speech'
@@ -897,8 +926,19 @@
       recognizing = false
       if (voiceTranscript.trim() && !voiceCommandProcessed) {
         dispatchRecognizedCommand(voiceTranscript.trim())
+      } else if (!voiceCommandProcessed && !voiceStopRequested && recognitionRetryCount < 1 && (recognitionErrorReason === '' || recognitionErrorReason === 'no-speech') && Date.now() - recognitionStartedAt < 3000) {
+        recognitionRetryCount++
+        recognitionErrorReason = ''
+        voiceStatus = 'Reconectando ao microfone... fale depois do sinal.'
+        renderPanel()
+        updateVoiceFabState()
+        setTimeout(function () { beginSpeechRecognition(SR) }, 350)
       } else {
-        if (!voiceCommandProcessed) voiceStatus = 'Nada foi dito. Toque para tentar novamente.'
+        if (!voiceCommandProcessed && !voiceStopRequested) {
+          voiceStatus = recognitionErrorReason === 'no-speech'
+            ? 'Nao consegui detectar sua voz. Verifique o microfone selecionado e tente novamente.'
+            : 'A escuta terminou sem audio. Verifique o microfone do Windows e tente novamente.'
+        }
         renderPanel()
         updateVoiceFabState()
       }
@@ -932,7 +972,12 @@
   }
   function stopListening() {
     clearTimeout(recognitionTimer)
+    voiceStopRequested = true
     microphonePending = false
+    if (microphonePermissionStream) {
+      microphonePermissionStream.getTracks().forEach(function (track) { track.stop() })
+      microphonePermissionStream = null
+    }
     if (recognition) recognition.stop()
     recognizing = false
     renderPanel()
